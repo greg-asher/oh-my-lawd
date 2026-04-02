@@ -4,6 +4,11 @@ Oh My Lawd is an independent open-source specification project for an agent harn
 
 This project is not affiliated with or endorsed by Anthropic.
 
+## License
+This repository is licensed under [Apache-2.0](LICENSE).
+
+Using this repository as a specification reference does not automatically require downstream implementations to be licensed under Apache-2.0. License obligations attach to material copied from this repository, not merely to ideas, requirements, or architectural patterns implemented independently.
+
 ## What Is An Agent Harness?
 An agent harness is not the model. It is the system around the model that governs how decisions are made, actions are executed, and state evolves over time.
 
@@ -76,14 +81,19 @@ The long-term goal is to maintain a public, implementation-grounded specificatio
 ## Prompt Pack
 This repository also includes a prompt pack for turning the spec set into an executable implementation workflow:
 
+- [prompt-pack/00-sample-starter-plan.md](prompt-pack/00-sample-starter-plan.md)
 - [prompt-pack/01-spec2plan.md](prompt-pack/01-spec2plan.md)
 - [prompt-pack/02-plan2tasks.md](prompt-pack/02-plan2tasks.md)
 - [prompt-pack/03-tasks2build.md](prompt-pack/03-tasks2build.md)
 
+Recommended starting point:
+1. use `00-sample-starter-plan.md` as a reusable high-level brief for cloning the repo and running the full workflow
+
 Recommended usage order:
 1. run `01-spec2plan.md` against the `spec/` folder to produce a `/plan` workspace
-2. run `02-plan2tasks.md` against `/plan` to produce a `/tasks` workspace
-3. run `03-tasks2build.md` against `/tasks` and `/plan` to execute the next ready implementation task honestly
+2. validate `/plan` before moving on
+3. run `02-plan2tasks.md` against `/plan` to produce a `/tasks` workspace
+4. run `03-tasks2build.md` against `/tasks` and `/plan` to execute the next ready implementation task honestly
 
 The intended pipeline is:
 - `spec/` -> `/plan` -> `/tasks` -> implementation
@@ -93,12 +103,44 @@ The prompt pack is designed to preserve the same boundaries as the spec set:
 - `/plan` becomes the strategic implementation layer
 - `/tasks` becomes the operational execution queue
 
+Workflow rules:
+- keep `spec/` read-only during plan, task, and implementation generation
+- do not skip directly from `spec/` to code
+- prefer fresh agent sessions for each major phase and each implementation task
+- treat repo state, not chat history, as the durable source of truth
+
+## Contributing And Governance
+This repository is governed as a specification project, not an implementation repo.
+
+Before opening a PR or issue:
+- read [CONTRIBUTING.md](CONTRIBUTING.md)
+- use the issue templates under [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE)
+- use [SECURITY.md](SECURITY.md) for sensitive reports instead of public issues
+- review [RELEASING.md](RELEASING.md) if the change affects release process or release-worthy repo state
+
+Contribution standards:
+- preserve layer boundaries
+- avoid redefining the same requirement in multiple documents
+- keep normative changes small and justified
+- keep `prompt-pack/` aligned with the spec set
+- prefer tightening and removal over speculative expansion
+
+The review model for this repo is:
+- `spec/` defines the contract
+- `prompt-pack/` must remain aligned with that contract
+- governance files protect against drift, unsafe prompts, and unreviewed normative changes
+
 ## Structure
 - `spec/oh-my-lawd.md`: index and document ownership boundaries
 - `spec/runtime-spec.md`: runtime execution, persistence, restore, and approval enforcement
 - `spec/orchestration-spec.md`: task state, blocking, scheduling, delegation, and task-output taxonomy
 - `spec/product-contract.md`: product UX, approval UX, explainability UX, and operational visibility
 - `spec/system-coherence-review.md`: non-normative coherence, scope, and complexity guardrails
+- `prompt-pack/00-sample-starter-plan.md`: reusable high-level brief for bootstrapping the full workflow
 - `prompt-pack/01-spec2plan.md`: derives a buildable `/plan` package from the spec set
 - `prompt-pack/02-plan2tasks.md`: derives an executable `/tasks` queue from `/plan`
 - `prompt-pack/03-tasks2build.md`: executes the next ready task and updates `/tasks` and selected `/plan` truth
+- `CONTRIBUTING.md`: contributor rules for boundary discipline and spec-safe changes
+- `SECURITY.md`: security and sensitive-reporting guidance
+- `RELEASING.md`: release cadence, versioning guidance, and release checklist
+- `.github/`: CODEOWNERS, PR template, and issue templates for repo governance
