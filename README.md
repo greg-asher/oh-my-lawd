@@ -32,9 +32,32 @@ The long-term goal is to maintain a public, implementation-grounded specificatio
 - [Product Contract](spec/product-contract.md)
 - [System Coherence Review](spec/system-coherence-review.md)
 
+## Prompt Pack
+This repository also includes a prompt pack for turning the spec set into an executable implementation workflow:
+
+- [prompt-pack/01-spec2plan.md](prompt-pack/01-spec2plan.md)
+- [prompt-pack/02-plan2tasks.md](prompt-pack/02-plan2tasks.md)
+- [prompt-pack/03-tasks2build.md](prompt-pack/03-tasks2build.md)
+
+Recommended usage order:
+1. run `01-spec2plan.md` against the `spec/` folder to produce a `/plan` workspace
+2. run `02-plan2tasks.md` against `/plan` to produce a `/tasks` workspace
+3. run `03-tasks2build.md` against `/tasks` and `/plan` to execute the next ready implementation task honestly
+
+The intended pipeline is:
+- `spec/` -> `/plan` -> `/tasks` -> implementation
+
+The prompt pack is designed to preserve the same boundaries as the spec set:
+- `spec/` remains the normative contract
+- `/plan` becomes the strategic implementation layer
+- `/tasks` becomes the operational execution queue
+
 ## Structure
 - `spec/oh-my-lawd.md`: index and document ownership boundaries
 - `spec/runtime-spec.md`: runtime execution, persistence, restore, and approval enforcement
 - `spec/orchestration-spec.md`: task state, blocking, scheduling, delegation, and task-output taxonomy
 - `spec/product-contract.md`: product UX, approval UX, explainability UX, and operational visibility
 - `spec/system-coherence-review.md`: non-normative coherence, scope, and complexity guardrails
+- `prompt-pack/01-spec2plan.md`: derives a buildable `/plan` package from the spec set
+- `prompt-pack/02-plan2tasks.md`: derives an executable `/tasks` queue from `/plan`
+- `prompt-pack/03-tasks2build.md`: executes the next ready task and updates `/tasks` and selected `/plan` truth
