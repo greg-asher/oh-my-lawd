@@ -191,9 +191,12 @@ When creating task files:
    - orchestration state semantics
    - scheduler/write-scope blocking
    - product state projection
+   - operator IA and first-run usability
+   - provider schema compatibility and loop containment
    - walkthrough verification
 5. Keep UI and UX tasks downstream of the persisted/runtime/orchestration truths they depend on.
 6. Do not produce placeholder tasks like “do cleanup later” unless they correspond to a real acceptance or verification need.
+7. Do not bury operator-validation work inside generic CLI or UX tasks when the plan identifies it as a distinct contract surface.
 
 ## Status initialization rules
 
@@ -286,6 +289,14 @@ Another agent should be able to:
 - open a single task file
 - execute it honestly
 - update task state and evidence without re-planning the whole system
+
+The generated task set MUST include explicit tasks, when present in `/plan`, for:
+- operator information architecture and command taxonomy
+- assistant-response visibility
+- cold-start guided success
+- provider schema compatibility hardening
+- repeated tool-use loop containment
+- live operator walkthrough validation
 
 ## Forbidden mistakes
 

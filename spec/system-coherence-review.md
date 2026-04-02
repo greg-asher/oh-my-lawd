@@ -63,6 +63,15 @@ The following items are not presumed `core_v1` unless a release plan explicitly 
 4. advanced policy-profile variations beyond the default supported mode set
 5. approval UX beyond the minimum scope needed for safe launch
 
+### 3.3 Evidence sufficiency contract
+`core_v1` and later release closure MUST be based on both scripted evidence and live operator evidence.
+
+Unit tests alone are insufficient for release closure.
+
+At minimum, release closure requires:
+1. scripted or automated checks, and
+2. live operator walkthrough evidence for required journeys
+
 ## 4. Complexity Budget Rule
 Before adding a new normative requirement, review it against these questions:
 1. What concrete failure does it prevent?
@@ -164,7 +173,45 @@ Scenario:
 3. product restores visible state
 4. unresolved work remains attributable and resumable
 
-## 8. System Compression Test
+### W6. Cold start to first useful answer
+Scenario:
+1. operator starts from a cold repo state
+2. system guides setup or required preconditions
+3. system reaches a first useful answer without dead-end prompts
+
+### W7. Provider schema rejection and recovery
+Scenario:
+1. provider rejects a structured output shape or response form
+2. adapter/runtime normalizes or fails deterministically
+3. operator or system receives a successful recovery path
+
+### W8. Repeated tool-use loop containment
+Scenario:
+1. model repeats equivalent tool-use proposals within a turn
+2. runtime detects the loop
+3. runtime aborts or falls back deterministically
+4. system does not silently spin to iteration limit
+
+### W9. Failed-state resume with actionable recovery
+Scenario:
+1. run resumes from a failed or unresolved state
+2. product shows current state and exact next actions
+3. operator can continue from a real recovery path rather than a dead end
+
+## 8. Release Closure
+For v1.1 closure, the following gates are release-blocking in addition to prior core gates:
+1. `PX-07`
+2. `PX-08`
+3. `PX-09`
+4. `PX-10`
+5. `PX-11`
+6. `PX-12`
+7. `RT-05C`
+8. `RT-05D`
+9. `RT-05E`
+10. `RT-05F`
+
+## 9. System Compression Test
 The spec set should remain compressible into one mental model:
 
 A run accepts user input, models actions through a deterministic turn engine, normalizes each attempted action into a shared runtime identity, authorizes and records every outcome, persists enough state to resume safely, optionally coordinates tasks and delegated subagents under explicit ownership and scope boundaries, and presents users with live state, approvals, and plain-language explanations grounded in that execution truth.

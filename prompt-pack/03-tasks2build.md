@@ -28,6 +28,7 @@ Your work must stay aligned with:
 9. If a task is too large, split it before or during execution and update `/tasks`.
 10. Keep status reporting honest.
 11. Prefer durable progress over broad speculative changes.
+12. A task cannot be marked `completed` unless both automated verification and live operator evidence are recorded when the task advances product-facing or provider-reliability acceptance gates.
 
 ## Required files to read before acting
 
@@ -128,6 +129,10 @@ Run the strongest available verification for the work completed:
 - static analysis
 - verification notes only where automation is not yet possible
 
+When the task advances product-facing or provider-reliability acceptance gates, verification MUST include:
+- automated checks, and
+- live operator walkthrough evidence
+
 Be explicit about what was and was not verified.
 
 ### Step 6: Determine honest task status
@@ -144,6 +149,8 @@ Use:
 - `failed` when the attempted approach did not succeed and needs rework
 
 Do not revert to `not_started` or `ready` after execution began unless you split the task and explicitly explain why.
+
+`completed` is invalid when required live operator evidence is missing.
 
 ## Required updates after execution
 
@@ -163,6 +170,11 @@ In the iteration log, append an entry with:
 - verification run
 - resulting status
 - next recommended step
+
+The latest iteration log entry MUST also include a standardized evidence block containing:
+- `automated_checks[]` (command and result)
+- `live_operator_walkthroughs[]` (scenario id, commands, observed output) when required
+- `acceptance_gates_covered[]`
 
 ### Update `/tasks/index.md`
 Reflect:
@@ -191,6 +203,13 @@ Only update plan artifacts if execution materially changed shared understanding,
 - high-level execution log in `/plan/README.md`
 
 Do not turn `/plan` into a task log. Update it only when repo-wide planning truth changed.
+
+## Release closure mode
+When operating in release-closure mode, continue execution until:
+1. no `ready` or `in_progress` tasks remain, and
+2. all required acceptance gates have evidence.
+
+Release closure MUST be rejected if any required live operator journey fails.
 
 ## Forbidden shortcuts
 

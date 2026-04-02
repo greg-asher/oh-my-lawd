@@ -74,7 +74,44 @@ User MUST be able to view:
 - when
 - what executed under that approval
 
-## 5. Extensibility Onboarding UX Contract
+## 5. Operator Information Architecture Contract
+Operator interaction surfaces MUST be action-oriented, self-describing, and recoverable without prior repository-specific knowledge.
+
+Required operator IA behavior:
+1. commands MUST be action-oriented and self-describing
+2. commands MUST be logically grouped; flat command sprawl is non-compliant
+3. the default path for a first operator action MUST be obvious without external documentation
+4. contextual help text MUST be available at the point of use
+5. every non-terminal state transition MUST expose what the operator can do next
+
+## 6. Assistant Response Visibility Contract
+The assistant's actual latest response content MUST always be visible in operator surfaces.
+
+Required behavior:
+1. final assistant answer MUST be visible in CLI and equivalent operator surfaces
+2. projection, state, or metadata views MUST NOT replace user-facing assistant output
+3. this requirement applies to new runs, resumed runs, and interactive operator surfaces
+4. if no assistant response exists yet, the system MUST explicitly state why, such as `blocked` or `approval_pending`
+
+## 7. Guided First-Run Usability Contract
+Cold-start usage MUST guide the operator to a meaningful first result without dead-end flows.
+
+Required behavior:
+1. cold start MUST produce one useful answer in a single guided flow
+2. dead-end prompts are prohibited
+3. the system MUST guide the operator to the next valid action when a required precondition is missing
+4. default flows MUST succeed without prior repository-specific knowledge
+
+## 8. Recovery UX Contract
+Recovery states MUST be actionable, not descriptive only.
+
+Every recovery or failure surface MUST include:
+1. what failed
+2. why it failed
+3. the exact next command or commands needed to resolve it
+
+Generic error-only output is non-compliant.
+## 9. Extensibility Onboarding UX Contract
 Onboarding MUST provide the guided flow:
 - discover -> select -> install -> configure -> validate -> activate
 
@@ -88,13 +125,13 @@ Validation failures MUST show:
 - reason
 - remediation instructions
 
-## 6. Privacy and Trust UX
+## 10. Privacy and Trust UX
 In `private-hardened` mode, UI MUST clearly indicate:
 1. active policy profile
 2. blocked egress behavior
 3. telemetry and export suppression status
 
-## 7. Live Operational State Visibility
+## 11. Live Operational State Visibility
 Product surfaces MUST show current execution truth, not only post-hoc explanations.
 
 Minimum visible states:
@@ -111,16 +148,22 @@ State visibility requirements:
 3. For `approval_pending`, UI MUST show pending approval scope and required decision.
 4. For `failed_unresolved`, UI MUST show unresolved failure summary and next remediation action.
 
-### 7.1 State freshness requirement
+### 11.1 State freshness requirement
 State display freshness MUST be testable:
 1. default freshness SLO: displayed state transitions MUST reflect backend state changes within 2 seconds in standard operating conditions
 2. deployments MAY configure a stricter SLO
 3. if deployment conditions cannot meet the default SLO, product MUST disclose the configured freshness target in operator settings
 
-## 8. Product-Level Acceptance Gates
+## 12. Product-Level Acceptance Gates
 - `PX-01`: non-expert users can explain system behavior from explanation UI artifacts.
 - `PX-02`: approval prompts expose runtime-defined approval scope and enforce scope boundaries.
 - `PX-03`: extension onboarding failure surfaces deterministic check IDs and remediations.
 - `PX-04`: privacy profile status is visible and understandable in product surfaces.
 - `PX-05`: active run state is visible and transition freshness meets the configured SLO (default <= 2 seconds).
 - `PX-06`: blocked and approval-pending states expose explicit unblock actions.
+- `PX-07`: guided-first operator information architecture is discoverable and self-describing.
+- `PX-08`: latest assistant response content is always visible in operator surfaces.
+- `PX-09`: every non-terminal operator state exposes explicit next action command(s).
+- `PX-10`: cold-start setup reaches a first useful answer without dead-end prompts.
+- `PX-11`: command naming is consistent, action-oriented, and self-describing.
+- `PX-12`: recovery states (`blocked`, `approval_pending`, `failed_unresolved`) provide concrete command-level remediation.
