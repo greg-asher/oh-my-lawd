@@ -1,0 +1,27 @@
+name: Prompt-pack drift
+description: Report a case where the prompt pack conflicts with or lags behind the spec set.
+title: "[Prompt Drift] "
+labels:
+  - prompt-pack
+body:
+  - type: textarea
+    id: drift
+    attributes:
+      label: Drift summary
+      description: What prompt behavior conflicts with the spec set?
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Which prompt-pack file and which spec file are involved?
+    validations:
+      required: true
+  - type: textarea
+    id: consequence
+    attributes:
+      label: Consequence
+      description: What bad outcome happens if the prompt is followed as written?
+    validations:
+      required: true

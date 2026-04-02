@@ -1,0 +1,27 @@
+name: Spec ambiguity
+description: Report an ambiguity that blocks planning or implementation.
+title: "[Ambiguity] "
+labels:
+  - ambiguity
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Ambiguity
+      description: What is unclear?
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Which files or sections create the ambiguity?
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Why it matters
+      description: What does this block or make unclear?
+    validations:
+      required: true

@@ -1,0 +1,27 @@
+name: Spec proposal
+description: Propose a scoped change to the spec set.
+title: "[Proposal] "
+labels:
+  - proposal
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What change are you proposing?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this needed?
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Affected area
+      description: Which layer or files would this touch?
+    validations:
+      required: true

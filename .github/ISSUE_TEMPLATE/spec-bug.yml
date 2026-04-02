@@ -1,0 +1,27 @@
+name: Spec bug
+description: Report a contradiction, invalid requirement, or traceability break in the spec set.
+title: "[Spec Bug] "
+labels:
+  - spec
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Which files or sections are involved?
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Why it matters
+      description: What breaks, contradicts, or becomes misleading?
+    validations:
+      required: true
