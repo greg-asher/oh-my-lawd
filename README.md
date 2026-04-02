@@ -1,8 +1,25 @@
 # Oh My Lawd
 
-Oh My Lawd is an independent open-source specification project for an agent runtime, orchestration layer, and product contract.
+Oh My Lawd is an independent open-source specification project for an agent harness: a runtime, orchestration, and product control system that turns a language model from a text generator into a controlled, repeatable execution engine.
 
 This project is not affiliated with or endorsed by Anthropic.
+
+## What Is An Agent Harness?
+An agent harness is not the model. It is the system around the model that governs how decisions are made, actions are executed, and state evolves over time.
+
+At a minimum, a serious harness defines:
+- an execution model with explicit steps, validation, and transitions
+- a durable state model for tasks, intermediate outputs, tool results, and prior decisions
+- a strict tool interface layer with typed inputs, structured outputs, and explicit failures
+- transition logic for continue, branch, wait-for-human, and terminate paths
+- a clear boundary between decision and mutation
+- reconstructable execution records and inspectable state
+
+Harness engineering is the discipline of designing those runtimes so agents behave like systems, not demos.
+
+In practical terms, the harness is a deterministic shell around a non-deterministic core.
+
+This repository treats harness design as infrastructure work. The model is a component. The real product is the runtime system that enforces control, repeatability, replayability, and operator visibility.
 
 ## Background
 This specification was created agentically.
@@ -11,7 +28,31 @@ It emerged from analysis of the rapid wave of Claude Code clones that appeared o
 
 Our agents identify Claude Code clones emerging on GitHub, analyze the implementations that remain publicly accessible, and continuously update a uniform best-practices specification distilled from the repos that survive DMCA takedowns.
 
-The goal of this repository is not to mirror any leaked code. The goal is to capture the durable architectural patterns, execution semantics, orchestration boundaries, and product behaviors that emerged across the clone ecosystem and turn them into a coherent public specification.
+The goal of this repository is not to mirror any leaked code. The goal is to capture the durable architectural patterns, execution semantics, orchestration boundaries, and product behaviors that emerged across the clone ecosystem and turn them into a coherent public specification for agent harnesses.
+
+## Why Harness Engineering Matters
+Raw LLM usage fails in predictable ways:
+- non-deterministic outputs
+- silent failure modes
+- weak memory discipline
+- no execution guarantees
+- poor debuggability
+
+Agent harnesses exist to impose systems-level constraints on probabilistic components.
+
+Strong harness engineering emphasizes:
+- determinism boundaries around model invocation and output validation
+- state as a first-class primitive rather than chat history
+- separation of decision, execution, and orchestration
+- replayability and auditability
+- failure handling, retry logic, and human intervention points
+- operator control surfaces for inspection, recovery, and guided intervention
+
+The architectural direction is toward agents as systems of action, not conversation:
+- fewer chat-loop abstractions
+- more task-oriented runtimes
+- stronger execution guarantees
+- closer alignment with workflow engines, event-driven systems, and durable orchestration runtimes
 
 ## Roadmap
 This repository is intended to become a continuously maintained public specification rather than a static snapshot.
