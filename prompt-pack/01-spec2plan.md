@@ -37,6 +37,10 @@ Then derive a normalized model of:
 - runtime truths
 - orchestration truths
 - product UX truths
+- operator information architecture requirements
+- first-run usability requirements
+- assistant-response visibility requirements
+- runtime/provider reliability constraints
 - invariants
 - acceptance gates
 - forbidden shortcuts or anti-patterns
@@ -101,6 +105,8 @@ For each gate include:
 - prerequisite dependencies
 
 Do not invent test results. This is a planning artifact.
+
+This matrix MUST explicitly include product/operator gates (`PX-07` through `PX-12`) and runtime/provider gates (`RT-05C` through `RT-05F`) when present in the spec.
 
 ### 7. `/plan/build-order.md`
 A dependency-aware implementation sequence.
@@ -212,6 +218,8 @@ Your plan should naturally enforce these principles when they are present in the
 - no hidden mutation
 - no resumability via inference
 - no layer leakage
+- operator-facing correctness is part of completion, not post-hoc polish
+- live operator validation is required for release closure when the spec requires it
 
 ## Required final behavior
 
@@ -220,6 +228,13 @@ At the end:
 2. write all required files
 3. ensure internal consistency across the plan artifacts
 4. include a short final summary in `/plan/README.md` of what is ready, what is ambiguous, and how a follow-on coding agent should start
+
+The plan MUST explicitly extract and preserve:
+- operator IA requirements
+- assistant-response visibility requirements
+- cold-start usability requirements
+- runtime/provider reliability requirements
+- live operator walkthrough evidence requirements
 
 ## Quality bar
 

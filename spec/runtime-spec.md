@@ -244,6 +244,33 @@ Approval-gate UX is defined in the Product Contract; runtime defines only approv
 2. Stream MUST emit exactly one terminal event (`done` or `error`).
 3. Stop reason and token usage MUST be normalized.
 
+### 8.1 Structured output compatibility contract
+Provider adapters MUST tolerate provider-side structured output variation within deterministic runtime handling.
+
+Required behavior:
+1. adapters MUST normalize provider responses into provider-supported schema subsets before exposing them to runtime consumers
+2. adapters MUST coerce partial provider structures when deterministic coercion is possible
+3. provider schema rejection MUST map to deterministic runtime error semantics with actionable details
+4. hard provider failures without a deterministic fallback path are non-compliant
+
+### 8.2 Model loop containment contract
+The runtime MUST detect repeated equivalent tool-use behavior within a turn.
+
+Required behavior:
+1. repeated equivalent tool-use signatures within a turn MUST be detected
+2. repeated equivalent tool-use behavior MUST trigger deterministic containment
+3. deterministic containment MUST either:
+   - abort with an explicit loop-related runtime error, or
+   - transition to a deterministic fallback path
+4. infinite or redundant tool-use loops are prohibited
+
+### 8.3 Dead-end access-request prevention
+If the transcript already contains sufficient tool results for response synthesis, the assistant MUST NOT finalize with a dead-end access request.
+
+Required behavior:
+1. if sufficient `tool_result` content already exists for synthesis, the assistant MUST produce a response or fail deterministically for another explicit reason
+2. finalization with generic `need access` or equivalent dead-end language is prohibited when sufficient tool results already exist
+
 ## 9. Error Contract
 All errors MUST include `code`, `message`, optional `details`.
 
@@ -263,6 +290,9 @@ Required runtime error codes:
 - `SESSION_LOAD_FAILED`
 - `SESSION_SAVE_FAILED`
 - `CONFIG_PARSE_FAILED`
+- `PROVIDER_SCHEMA_INCOMPATIBLE`
+- `MODEL_TOOL_LOOP_DETECTED`
+- `MODEL_DEAD_END_ACCESS_REQUEST`
 
 ## 10. Runtime Acceptance Gates
 - `RT-01`: step machine follows legal transitions only.
@@ -275,6 +305,10 @@ Required runtime error codes:
 - `RT-05`: stream terminal event uniqueness holds.
 - `RT-05A`: parse-invalid assistant output fails with `ASSISTANT_OUTPUT_PARSE_FAILED`.
 - `RT-05B`: non-terminal non-actionable assistant output fails with `ASSISTANT_OUTPUT_NON_ACTIONABLE`.
+- `RT-05C`: provider schema compatibility is validated at the execution boundary.
+- `RT-05D`: provider rejection and normalization failures map to deterministic runtime errors.
+- `RT-05E`: repeated equivalent tool-use loops are contained deterministically.
+- `RT-05F`: dead-end access-request finalization is prevented when sufficient tool results already exist.
 - `RT-06`: `run_state` save and load atomicity and compatibility checks pass.
 - `RT-06A`: restore resumes from persisted `runtime_cursor`, `frontier`, `approval_state`, and `ledger` without transcript reconstruction.
 - `RT-07`: approval-gated execution remains blocked without a valid persisted approval record.
