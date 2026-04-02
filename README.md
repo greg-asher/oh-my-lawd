@@ -118,6 +118,18 @@ Before opening a PR or issue:
 - use [SECURITY.md](SECURITY.md) for sensitive reports instead of public issues
 - review [RELEASING.md](RELEASING.md) if the change affects release process or release-worthy repo state
 
+Use GitHub Discussions for:
+- open-ended questions about the spec set
+- architecture discussion that is still exploratory
+- comparisons to other harnesses
+- reports on emerging agent harnesses worth evaluating
+
+Use Issues for:
+- spec bugs
+- ambiguities that block planning or implementation
+- scoped proposals
+- prompt-pack drift
+
 Contribution standards:
 - preserve layer boundaries
 - avoid redefining the same requirement in multiple documents
