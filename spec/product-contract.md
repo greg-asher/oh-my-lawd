@@ -83,6 +83,15 @@ Required operator IA behavior:
 3. the default path for a first operator action MUST be obvious without external documentation
 4. contextual help text MUST be available at the point of use
 5. every non-terminal state transition MUST expose what the operator can do next
+6. help text, onboarding text, remediation guidance, and next-command suggestions MUST only show commands executable exactly as rendered
+
+### 5.1 Primary Operator Surface Reality
+The documented primary operator surface MUST be the real release surface, not a demo substitute.
+
+Required behavior:
+1. the primary operator surface MUST accept real user input and route through real runtime and orchestration behavior as applicable
+2. demo commands, walkthrough harnesses, and fixture-backed scenario flows do NOT satisfy the primary operator surface unless the documented release scope explicitly defines them as the real surface
+3. if a preserved or canonical operator seam is renamed, the rename MUST be documented before implementation completion
 
 ## 6. Assistant Response Visibility Contract
 The assistant's actual latest response content MUST always be visible in operator surfaces.
@@ -167,3 +176,5 @@ State display freshness MUST be testable:
 - `PX-10`: cold-start setup reaches a first useful answer without dead-end prompts.
 - `PX-11`: command naming is consistent, action-oriented, and self-describing.
 - `PX-12`: recovery states (`blocked`, `approval_pending`, `failed_unresolved`) provide concrete command-level remediation.
+- `PX-13`: the documented primary operator surface accepts real inputs and routes through real runtime/orchestration behavior rather than demo-only scenarios.
+- `PX-14`: every command shown in help, onboarding, remediation, and next-action guidance is executable exactly as rendered.

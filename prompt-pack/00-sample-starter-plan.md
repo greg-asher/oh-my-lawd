@@ -15,9 +15,10 @@
 
 2. **Generate `/plan` from the spec**
 - In a fresh agent session rooted at the cloned repo, run the contents of [`prompt-pack/01-spec2plan.md`](https://github.com/greg-asher/oh-my-lawd/blob/main/prompt-pack/01-spec2plan.md) against `spec/`.
-- Require the full planning package the prompt specifies, including `README.md`, `system-summary.md`, `spec-map.md`, `domain-glossary.md`, `invariants.md`, `acceptance-matrix.md`, `build-order.md`, `task-graph.md`, `open-questions.md`, `forbidden-shortcuts.md`, `walkthroughs.md`, and `implementation-brief.json`.
+- Require the full planning package the prompt specifies, including `README.md`, `system-summary.md`, `spec-map.md`, `domain-glossary.md`, `invariants.md`, `acceptance-matrix.md`, `build-order.md`, `task-graph.md`, `open-questions.md`, `forbidden-shortcuts.md`, `walkthroughs.md`, `implementation-brief.json`, and `preserved-seams.md`.
 - Do not proceed to `/tasks` until `/plan` explicitly captures the canonical contracts that will anchor implementation:
   `run_agent(config, prompt)`, `run_tasks(team, tasks)`, `run_team(team, goal)`, `run_state`, Action Envelope, Action Outcome, task/result schema, approval records, orchestration metadata, and product-visible run states.
+- Require `/plan/preserved-seams.md` to record those canonical seams, their owning layers, planned task coverage, intended operator surface, and verification method.
 
 3. **Validate `/plan` before task generation**
 - Confirm `/plan` preserves layer boundaries:
@@ -53,6 +54,8 @@
 - `/tasks` must pass the prompt’s own consistency checks: markdown/JSON parity, valid prerequisites, valid acceptance gates, and a coherent recommended next task.
 - The implementation phase must drive the repo toward the spec acceptance gates, especially the `core_v1` baseline from the coherence review:
   Action Envelope, Action Outcome, deterministic turn engine, authorization before execution, deterministic mixed-batch append ordering, atomic `run_state` save/load, DAG validation, write-scope conflict blocking, visible `blocked`, visible `approval_pending`, and resumable restore without transcript reconstruction.
+- Release evidence must attach to the real operator surface and preserved seams, not only to demo flows or fixture-backed walkthroughs.
+- When persisted runtime truth is in scope, the main operator path must create, load, or resume real persisted state.
 - Final release validation must cover the canonical walkthroughs W1-W5 and the runtime (`RT-*`), orchestration (`OR-*`), and product (`PX-*`) gates with honest evidence.
 
 ## Assumptions and Defaults
