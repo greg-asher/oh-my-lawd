@@ -41,6 +41,7 @@ Then derive a normalized model of:
 - first-run usability requirements
 - assistant-response visibility requirements
 - runtime/provider reliability constraints
+- preserved, canonical, and release-blocking seams
 - invariants
 - acceptance gates
 - forbidden shortcuts or anti-patterns
@@ -106,7 +107,7 @@ For each gate include:
 
 Do not invent test results. This is a planning artifact.
 
-This matrix MUST explicitly include product/operator gates (`PX-07` through `PX-12`) and runtime/provider gates (`RT-05C` through `RT-05F`) when present in the spec.
+This matrix MUST explicitly include product/operator gates (`PX-07` through `PX-14`) and runtime/provider gates (`RT-05C` through `RT-05F`) when present in the spec.
 
 ### 7. `/plan/build-order.md`
 A dependency-aware implementation sequence.
@@ -185,6 +186,7 @@ Produce a machine-usable JSON brief that captures the normalized planning truth.
 - source_specs
 - layers
 - canonical_terms
+- preserved_seams
 - invariants
 - acceptance_gates
 - build_order
@@ -193,6 +195,21 @@ Produce a machine-usable JSON brief that captures the normalized planning truth.
 - forbidden_shortcuts
 
 Make this stable and structured so another agent can load it without reparsing markdown.
+
+### 13. `/plan/preserved-seams.md`
+Extract all preserved, canonical, and release-blocking seams into a parity table.
+
+For each seam include:
+- seam name
+- source spec file
+- preserved/canonical/release-blocking status
+- owning layer
+- planned task ids
+- implementation target
+- operator entrypoint, if applicable
+- verification method
+
+Do not silently rename, narrow, delay, or substitute these seams. Any such change MUST be recorded explicitly in the plan as a deviation with rationale and impact.
 
 ## Planning standards
 
@@ -220,6 +237,7 @@ Your plan should naturally enforce these principles when they are present in the
 - no layer leakage
 - operator-facing correctness is part of completion, not post-hoc polish
 - live operator validation is required for release closure when the spec requires it
+- preserved seams must remain visible from spec to implementation unless explicitly documented otherwise
 
 ## Required final behavior
 
@@ -235,6 +253,7 @@ The plan MUST explicitly extract and preserve:
 - cold-start usability requirements
 - runtime/provider reliability requirements
 - live operator walkthrough evidence requirements
+- preserved, canonical, and release-blocking seams
 
 ## Quality bar
 

@@ -38,6 +38,7 @@ Read at minimum:
 - `/plan/README.md`
 - `/plan/system-summary.md`
 - `/plan/spec-map.md`
+- `/plan/preserved-seams.md`
 - `/plan/invariants.md`
 - `/plan/acceptance-matrix.md`
 - `/plan/build-order.md`
@@ -297,6 +298,20 @@ The generated task set MUST include explicit tasks, when present in `/plan`, for
 - provider schema compatibility hardening
 - repeated tool-use loop containment
 - live operator walkthrough validation
+- preserved seam parity and primary operator-surface honesty
+
+Every preserved seam in `/plan/preserved-seams.md` MUST map to at least one task whose completion criteria include:
+- a concrete implementation artifact
+- an executable operator or runtime surface when applicable
+- verification tied to that real surface
+
+Do not allow a preserved seam to be satisfied only by a demo flow, alias, fixture, or walkthrough harness unless the plan explicitly authorizes that reduction.
+
+If the plan defines a CLI or other explicit primary operator surface, the task set MUST include dedicated coverage for:
+- executable command surface
+- accurate help text
+- accurate remediation and next-command guidance
+- parity between shown commands and actual invocation paths
 
 ## Forbidden mistakes
 

@@ -29,6 +29,7 @@ Your work must stay aligned with:
 10. Keep status reporting honest.
 11. Prefer durable progress over broad speculative changes.
 12. A task cannot be marked `completed` unless both automated verification and live operator evidence are recorded when the task advances product-facing or provider-reliability acceptance gates.
+13. Demo, walkthrough, and scenario surfaces do not close preserved seams unless `/plan` explicitly defines them as the real release surface.
 
 ## Required files to read before acting
 
@@ -42,6 +43,13 @@ Then read:
 - the selected task file
 - any directly relevant `/plan` files referenced by that task
 - any existing code/files needed to execute the task
+
+Before claiming implementation completion or release closure, also read:
+- `/plan/spec-map.md`
+- `/plan/domain-glossary.md`
+- `/plan/invariants.md`
+- `/plan/implementation-brief.json`
+- `/plan/preserved-seams.md`
 
 ## Task selection rules
 
@@ -135,6 +143,11 @@ When the task advances product-facing or provider-reliability acceptance gates, 
 
 Be explicit about what was and was not verified.
 
+When the task advances a preserved seam or primary operator surface:
+- verification MUST exercise the real delivered surface, not only a demo or fixture-backed substitute
+- any shown help, onboarding, remediation, or next-command guidance MUST be checked for executable honesty
+- when persisted runtime truth is part of the task scope, verification MUST create, load, or resume real persisted state through the intended operator surface
+
 ### Step 6: Determine honest task status
 After implementation and verification, set the task to one of:
 - `completed`
@@ -151,6 +164,24 @@ Use:
 Do not revert to `not_started` or `ready` after execution began unless you split the task and explicitly explain why.
 
 `completed` is invalid when required live operator evidence is missing.
+`completed` is invalid when preserved seam parity is still missing for the task's declared scope.
+
+### Step 7: Perform parity audit before closure
+Before claiming implementation completion, release closure, or equivalent milestone completion:
+1. compare the delivered system against `/plan/spec-map.md`
+2. compare it against `/plan/domain-glossary.md`
+3. compare it against `/plan/invariants.md`
+4. compare it against `/plan/implementation-brief.json`
+5. compare it against `/plan/preserved-seams.md`
+
+Report any preserved seam that is:
+- missing
+- renamed without documentation
+- demo-only
+- non-executable as presented
+- validated only through substitute surfaces
+
+Do not claim completion while any preserved seam in scope fails this audit.
 
 ## Required updates after execution
 
@@ -200,6 +231,7 @@ Only update plan artifacts if execution materially changed shared understanding,
 - acceptance gate progress in `/plan/acceptance-matrix.md`
 - open ambiguities in `/plan/open-questions.md`
 - walkthrough readiness in `/plan/walkthroughs.md`
+- preserved seam parity or documented seam deviations in `/plan/preserved-seams.md`
 - high-level execution log in `/plan/README.md`
 
 Do not turn `/plan` into a task log. Update it only when repo-wide planning truth changed.
@@ -224,6 +256,7 @@ You must not:
 - casually widen enums or policy modes
 - claim completion based only on code being present
 - defer all evidence to later while marking a task complete now
+- allow demo-only or fixture-only operator surfaces to stand in for preserved seams
 
 ## Splitting behavior
 
