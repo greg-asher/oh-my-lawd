@@ -109,6 +109,28 @@ Workflow rules:
 - prefer fresh agent sessions for each major phase and each implementation task
 - treat repo state, not chat history, as the durable source of truth
 
+## Autonomous Runner
+This repository includes a repo-local helper that runs the prompt-pack pipeline through the `codex` CLI.
+
+Requirements:
+- `codex` installed and available on `PATH`
+- Python 3 available locally
+
+Usage:
+
+```bash
+./bin/oh-my-lawd-build
+```
+
+Useful flags:
+- `./bin/oh-my-lawd-build --dry-run`
+- `./bin/oh-my-lawd-build --resume`
+- `./bin/oh-my-lawd-build --max-build-iterations 10`
+- `./bin/oh-my-lawd-build --model <model>`
+- `./bin/oh-my-lawd-build --profile <profile>`
+
+Runner state and logs are written to `.ohmylawd/`.
+
 ## Contributing And Governance
 This repository is governed as a specification project, not an implementation repo.
 
