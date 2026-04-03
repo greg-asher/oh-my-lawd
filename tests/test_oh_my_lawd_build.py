@@ -15,6 +15,7 @@ from scripts.oh_my_lawd_build import (
     run_phase,
     run_pipeline,
     should_continue_build_loop,
+    validate_queue_state,
     validate_required_outputs,
 )
 
@@ -128,6 +129,31 @@ class ValidationTests(unittest.TestCase):
 
 
 class QueueStateTests(unittest.TestCase):
+    def test_validate_queue_state_rejects_non_object(self):
+        self.assertEqual(
+            validate_queue_state([]),
+            ["queue state must be a JSON object"],
+        )
+
+    def test_validate_queue_state_rejects_null_task_lists(self):
+        queue_state = {
+            "ready_tasks": None,
+            "blocked_tasks": None,
+            "in_progress_tasks": None,
+            "completed_tasks": None,
+            "recommended_next_task": None,
+            "last_generated_at": "2026-04-03T12:00:00Z",
+        }
+        self.assertEqual(
+            validate_queue_state(queue_state),
+            [
+                "ready_tasks must be a list",
+                "blocked_tasks must be a list",
+                "in_progress_tasks must be a list",
+                "completed_tasks must be a list",
+            ],
+        )
+
     def test_loop_stops_when_queue_is_exhausted(self):
         queue_state = {
             "ready_tasks": [],

@@ -153,19 +153,22 @@ def validate_required_outputs(phase: PhaseSpec) -> list[Path]:
     return [path for path in phase.required_outputs if not path.exists()]
 
 
-def load_json(path: Path) -> dict:
+def load_json(path: Path) -> object:
     return json.loads(path.read_text())
 
 
-def validate_queue_state(queue_state: dict) -> list[str]:
+def validate_queue_state(queue_state: object) -> list[str]:
     errors: list[str] = []
+    if not isinstance(queue_state, dict):
+        return ["queue state must be a JSON object"]
+
     missing_keys = [key for key in QUEUE_STATE_KEYS if key not in queue_state]
     if missing_keys:
         errors.append(f"missing keys: {', '.join(missing_keys)}")
 
     for key in ("ready_tasks", "blocked_tasks", "in_progress_tasks", "completed_tasks"):
         value = queue_state.get(key)
-        if value is not None and not isinstance(value, list):
+        if not isinstance(value, list):
             errors.append(f"{key} must be a list")
 
     recommended_next_task = queue_state.get("recommended_next_task")
@@ -206,6 +209,8 @@ def read_queue_state(queue_state_path: Path) -> dict:
     errors = validate_queue_state(queue_state)
     if errors:
         raise ValueError(f"Invalid queue-state.json: {'; '.join(errors)}")
+    if not isinstance(queue_state, dict):
+        raise ValueError("Invalid queue-state.json: queue state must be a JSON object")
     return queue_state
 
 
