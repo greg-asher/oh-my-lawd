@@ -191,6 +191,14 @@ def validate_phase_outputs(repo_root: Path, phase: PhaseSpec) -> None:
             raise FileNotFoundError("02-plan2tasks did not produce any tasks/TASK-*.md files")
 
 
+def phase_outputs_are_valid(repo_root: Path, phase: PhaseSpec) -> bool:
+    try:
+        validate_phase_outputs(repo_root, phase)
+    except (FileNotFoundError, ValueError):
+        return False
+    return True
+
+
 def read_queue_state(queue_state_path: Path) -> dict:
     if not queue_state_path.exists():
         raise FileNotFoundError(f"Missing queue state file: {queue_state_path}")
@@ -339,20 +347,39 @@ def record_run_state(
     last_exit_code: int,
     last_command: list[str],
     last_log_path: Path,
+    error_message: str | None = None,
 ) -> None:
+    payload = {
+        "status": status,
+        "current_phase": current_phase,
+        "completed_phases": completed_phases,
+        "build_iterations": build_iterations,
+        "last_exit_code": last_exit_code,
+        "last_command": last_command,
+        "last_log_path": str(last_log_path),
+        "updated_at": utc_now(),
+    }
+    if error_message is not None:
+        payload["last_error"] = error_message
     save_run_state(
         paths,
-        {
-            "status": status,
-            "current_phase": current_phase,
-            "completed_phases": completed_phases,
-            "build_iterations": build_iterations,
-            "last_exit_code": last_exit_code,
-            "last_command": last_command,
-            "last_log_path": str(last_log_path),
-            "updated_at": utc_now(),
-        },
+        payload,
     )
+
+
+def revalidate_completed_phases(
+    repo_root: Path,
+    phase_specs: list[PhaseSpec],
+    prior_completed_phases: list[str],
+) -> list[str]:
+    validated: list[str] = []
+    for phase in phase_specs:
+        if phase.key not in prior_completed_phases:
+            break
+        if not phase_outputs_are_valid(repo_root, phase):
+            break
+        validated.append(phase.key)
+    return validated
 
 
 def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
@@ -365,15 +392,36 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
     paths.logs_dir.mkdir(parents=True, exist_ok=True)
     ensure_codex_exists(args.codex_bin, dry_run=args.dry_run)
 
-    prior_state = load_run_state(paths) if args.resume else None
+    phase_specs = build_phase_specs(repo_root)
+    prior_state = load_run_state(paths) if args.resume and not args.dry_run else None
+    if prior_state and prior_state.get("status") == "dry_run":
+        prior_state = None
+
+    completed_phases = (
+        revalidate_completed_phases(
+            repo_root,
+            phase_specs,
+            list(prior_state.get("completed_phases", [])),
+        )
+        if prior_state
+        else []
+    )
+
     if prior_state and prior_state.get("status") == "completed":
-        if args.verbose:
-            print("[runner] prior run already completed", file=sys.stderr)
-        return 0
+        try:
+            queue_state = read_queue_state(repo_root / "tasks/queue-state.json")
+        except (FileNotFoundError, ValueError):
+            queue_state = None
+        if (
+            completed_phases == [phase.key for phase in phase_specs]
+            and queue_state is not None
+            and not should_continue_build_loop(queue_state)
+        ):
+            if args.verbose:
+                print("[runner] prior run already completed", file=sys.stderr)
+            return 0
 
-    completed_phases = list(prior_state.get("completed_phases", [])) if prior_state else []
-
-    for phase in build_phase_specs(repo_root):
+    for phase in phase_specs:
         if phase.key in completed_phases:
             continue
 
@@ -392,14 +440,28 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
             return result.exit_code
 
         if not args.dry_run:
-            validate_phase_outputs(repo_root, phase)
+            try:
+                validate_phase_outputs(repo_root, phase)
+            except (FileNotFoundError, ValueError) as exc:
+                record_run_state(
+                    paths=paths,
+                    status="failed",
+                    current_phase=phase.key,
+                    completed_phases=completed_phases,
+                    build_iterations=0,
+                    last_exit_code=1,
+                    last_command=result.command,
+                    last_log_path=result.log_path,
+                    error_message=str(exc),
+                )
+                raise
 
         completed_phases.append(phase.key)
         record_run_state(
             paths=paths,
             status="running" if not args.dry_run else "dry_run",
             current_phase=phase.key,
-            completed_phases=completed_phases,
+            completed_phases=completed_phases if not args.dry_run else [],
             build_iterations=0,
             last_exit_code=0,
             last_command=result.command,
@@ -413,7 +475,7 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
             paths=paths,
             status="dry_run",
             current_phase=dry_run_phase.key,
-            completed_phases=completed_phases,
+            completed_phases=[],
             build_iterations=1,
             last_exit_code=result.exit_code,
             last_command=result.command,
@@ -441,7 +503,21 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
             )
             return result.exit_code
 
-        queue_state = read_queue_state(repo_root / "tasks/queue-state.json")
+        try:
+            queue_state = read_queue_state(repo_root / "tasks/queue-state.json")
+        except (FileNotFoundError, ValueError) as exc:
+            record_run_state(
+                paths=paths,
+                status="failed",
+                current_phase=phase.key,
+                completed_phases=completed_phases,
+                build_iterations=iteration,
+                last_exit_code=1,
+                last_command=result.command,
+                last_log_path=result.log_path,
+                error_message=str(exc),
+            )
+            raise
         status = "running"
         if not should_continue_build_loop(queue_state):
             status = "completed"
@@ -460,6 +536,17 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
         if status == "completed":
             return 0
 
+    record_run_state(
+        paths=paths,
+        status="failed",
+        current_phase="03-tasks2build",
+        completed_phases=completed_phases,
+        build_iterations=args.max_build_iterations,
+        last_exit_code=1,
+        last_command=[],
+        last_log_path=paths.logs_dir / f"03-tasks2build-{args.max_build_iterations:03d}.log",
+        error_message=f"Exceeded max build iterations ({args.max_build_iterations}) before queue exhaustion",
+    )
     raise RuntimeError(
         f"Exceeded max build iterations ({args.max_build_iterations}) before queue exhaustion"
     )

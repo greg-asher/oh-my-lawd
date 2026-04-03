@@ -42,6 +42,48 @@ def seed_repo(repo_root: Path) -> None:
         prompt_path.write_text(f"# {name}\n")
 
 
+def create_plan_outputs(repo_root: Path) -> None:
+    for relative in (
+        "plan/README.md",
+        "plan/system-summary.md",
+        "plan/spec-map.md",
+        "plan/domain-glossary.md",
+        "plan/invariants.md",
+        "plan/acceptance-matrix.md",
+        "plan/build-order.md",
+        "plan/task-graph.md",
+        "plan/open-questions.md",
+        "plan/forbidden-shortcuts.md",
+        "plan/walkthroughs.md",
+        "plan/implementation-brief.json",
+    ):
+        path = repo_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("ok\n")
+
+
+def create_task_outputs(repo_root: Path, queue_state: dict | None = None) -> None:
+    defaults = {
+        "ready_tasks": [],
+        "blocked_tasks": [],
+        "in_progress_tasks": [],
+        "completed_tasks": ["TASK-001"],
+        "recommended_next_task": None,
+        "last_generated_at": "2026-04-03T12:00:00Z",
+    }
+    payload = defaults if queue_state is None else queue_state
+    for relative in (
+        "tasks/README.md",
+        "tasks/index.md",
+        "tasks/task-index.json",
+    ):
+        path = repo_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("ok\n")
+    (repo_root / "tasks/TASK-001.md").write_text("# Task\n")
+    (repo_root / "tasks/queue-state.json").write_text(json.dumps(payload))
+
+
 class ParserTests(unittest.TestCase):
     def test_parser_defaults(self):
         args = build_parser().parse_args([])
@@ -165,6 +207,9 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((logs_dir / "01-spec2plan.log").exists())
             self.assertTrue((logs_dir / "02-plan2tasks.log").exists())
             self.assertTrue((logs_dir / "03-tasks2build-001.log").exists())
+            state = json.loads((repo_root / ".ohmylawd/run-state.json").read_text())
+            self.assertEqual(state["status"], "dry_run")
+            self.assertEqual(state["completed_phases"], [])
 
     @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
     @mock.patch("scripts.oh_my_lawd_build.run_phase")
@@ -177,39 +222,8 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             seed_repo(repo_root)
-            for relative in (
-                "plan/README.md",
-                "plan/system-summary.md",
-                "plan/spec-map.md",
-                "plan/domain-glossary.md",
-                "plan/invariants.md",
-                "plan/acceptance-matrix.md",
-                "plan/build-order.md",
-                "plan/task-graph.md",
-                "plan/open-questions.md",
-                "plan/forbidden-shortcuts.md",
-                "plan/walkthroughs.md",
-                "plan/implementation-brief.json",
-                "tasks/README.md",
-                "tasks/index.md",
-                "tasks/task-index.json",
-            ):
-                path = repo_root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("ok\n")
-            (repo_root / "tasks/TASK-001.md").write_text("# Task\n")
-            (repo_root / "tasks/queue-state.json").write_text(
-                json.dumps(
-                    {
-                        "ready_tasks": [],
-                        "blocked_tasks": [],
-                        "in_progress_tasks": [],
-                        "completed_tasks": ["TASK-001"],
-                        "recommended_next_task": None,
-                        "last_generated_at": "2026-04-03T12:00:00Z",
-                    }
-                )
-            )
+            create_plan_outputs(repo_root)
+            create_task_outputs(repo_root)
 
             exit_code = run_pipeline(repo_root, make_args())
 
@@ -229,19 +243,8 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             seed_repo(repo_root)
-            (repo_root / "tasks").mkdir(parents=True, exist_ok=True)
-            (repo_root / "tasks/queue-state.json").write_text(
-                json.dumps(
-                    {
-                        "ready_tasks": [],
-                        "blocked_tasks": [],
-                        "in_progress_tasks": [],
-                        "completed_tasks": ["TASK-001"],
-                        "recommended_next_task": None,
-                        "last_generated_at": "2026-04-03T12:00:00Z",
-                    }
-                )
-            )
+            create_plan_outputs(repo_root)
+            create_task_outputs(repo_root)
             state = {
                 "status": "running",
                 "current_phase": "03-tasks2build",
@@ -261,6 +264,92 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             first_phase = run_phase_mock.call_args_list[0].args[0]
             self.assertEqual(first_phase.log_name, "03-tasks2build-003.log")
+
+    @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
+    @mock.patch("scripts.oh_my_lawd_build.run_phase")
+    def test_resume_replays_skipped_phases_when_outputs_are_missing(self, run_phase_mock, _ensure_codex):
+        run_phase_mock.side_effect = [
+            mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/01.log")),
+            mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/02.log")),
+            mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/03.log")),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            create_task_outputs(repo_root)
+            paths = RunnerPaths(repo_root)
+            paths.state_dir.mkdir(parents=True, exist_ok=True)
+            paths.run_state_path.write_text(
+                json.dumps(
+                    {
+                        "status": "running",
+                        "current_phase": "03-tasks2build",
+                        "completed_phases": ["01-spec2plan", "02-plan2tasks"],
+                        "build_iterations": 2,
+                        "last_exit_code": 0,
+                        "last_command": ["codex"],
+                        "last_log_path": "/tmp/old.log",
+                        "updated_at": "2026-04-03T12:00:00Z",
+                    }
+                )
+            )
+
+            with self.assertRaises(FileNotFoundError):
+                run_pipeline(repo_root, make_args(resume=True))
+            self.assertEqual(run_phase_mock.call_args_list[0].args[0].key, "01-spec2plan")
+
+    @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
+    @mock.patch("scripts.oh_my_lawd_build.run_phase")
+    def test_validation_failure_records_failed_state(self, run_phase_mock, _ensure_codex):
+        run_phase_mock.return_value = mock.Mock(
+            exit_code=0,
+            command=["codex"],
+            log_path=Path("/tmp/01.log"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+
+            with self.assertRaises(FileNotFoundError):
+                run_pipeline(repo_root, make_args())
+
+            state = json.loads((repo_root / ".ohmylawd/run-state.json").read_text())
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["current_phase"], "01-spec2plan")
+            self.assertIn("did not produce required outputs", state["last_error"])
+
+    @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
+    @mock.patch("scripts.oh_my_lawd_build.run_phase")
+    def test_resume_after_dry_run_does_not_skip_phase_generation(self, run_phase_mock, _ensure_codex):
+        run_phase_mock.side_effect = [
+            mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/01.log")),
+            mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/02.log")),
+            mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/03.log")),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            paths = RunnerPaths(repo_root)
+            paths.state_dir.mkdir(parents=True, exist_ok=True)
+            paths.run_state_path.write_text(
+                json.dumps(
+                    {
+                        "status": "dry_run",
+                        "current_phase": "03-tasks2build",
+                        "completed_phases": ["01-spec2plan", "02-plan2tasks"],
+                        "build_iterations": 1,
+                        "last_exit_code": 0,
+                        "last_command": ["codex"],
+                        "last_log_path": "/tmp/old.log",
+                        "updated_at": "2026-04-03T12:00:00Z",
+                    }
+                )
+            )
+
+            with self.assertRaises(FileNotFoundError):
+                run_pipeline(repo_root, make_args(resume=True))
+
+            self.assertEqual(run_phase_mock.call_args_list[0].args[0].key, "01-spec2plan")
 
 
 if __name__ == "__main__":
