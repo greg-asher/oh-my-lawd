@@ -214,7 +214,6 @@ def build_phase_specs(repo_root: Path) -> list[PhaseSpec]:
                 repo_root / "plan/task-graph.md",
                 repo_root / "plan/open-questions.md",
                 repo_root / "plan/forbidden-shortcuts.md",
-                repo_root / "plan/walkthroughs.md",
                 repo_root / "plan/implementation-brief.json",
             ],
             log_name="01-spec2plan.log",
@@ -255,6 +254,8 @@ def ensure_codex_exists(codex_bin: str) -> None:
     if shutil.which(codex_bin) is None:
         raise FileNotFoundError(f"Codex binary not found on PATH: {codex_bin}")
 ```
+
+Manual walkthrough notes are optional team documentation and are not enforced runner outputs.
 
 - [ ] **Step 4: Add a subprocess execution wrapper and test it with mocks**
 
@@ -527,7 +528,6 @@ class MainFlowTests(unittest.TestCase):
                 "plan/task-graph.md",
                 "plan/open-questions.md",
                 "plan/forbidden-shortcuts.md",
-                "plan/walkthroughs.md",
                 "plan/implementation-brief.json",
                 "tasks/README.md",
                 "tasks/index.md",

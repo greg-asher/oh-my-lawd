@@ -23,7 +23,6 @@ PLAN_OUTPUTS = (
     "plan/task-graph.md",
     "plan/open-questions.md",
     "plan/forbidden-shortcuts.md",
-    "plan/walkthroughs.md",
     "plan/implementation-brief.json",
 )
 

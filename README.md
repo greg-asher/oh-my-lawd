@@ -76,7 +76,7 @@ The long-term goal is to maintain a public, implementation-grounded specificatio
 - [Runtime Specification](spec/runtime-spec.md)
 - [Orchestration Specification](spec/orchestration-spec.md)
 - [Product Contract](spec/product-contract.md)
-- [System Coherence Review](spec/system-coherence-review.md)
+- [Scope and Simplicity Guide](spec/scope-and-simplicity-guide.md)
 
 ## Prompt Pack
 This repository also includes a prompt pack for turning the spec set into an executable implementation workflow:
@@ -171,7 +171,7 @@ The review model for this repo is:
 - `spec/runtime-spec.md`: runtime execution, persistence, restore, and approval enforcement
 - `spec/orchestration-spec.md`: task state, blocking, scheduling, delegation, and task-output taxonomy
 - `spec/product-contract.md`: product UX, approval UX, explainability UX, and operational visibility
-- `spec/system-coherence-review.md`: non-normative coherence, scope, and complexity guardrails
+- `spec/scope-and-simplicity-guide.md`: non-normative guide for lean scope and clear language
 - `prompt-pack/00-sample-starter-plan.md`: reusable high-level brief for bootstrapping the full workflow
 - `prompt-pack/01-spec2plan.md`: derives a buildable `/plan` package from the spec set
 - `prompt-pack/02-plan2tasks.md`: derives an executable `/tasks` queue from `/plan`

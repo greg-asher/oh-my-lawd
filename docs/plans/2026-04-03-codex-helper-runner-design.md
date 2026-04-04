@@ -130,8 +130,9 @@ Require:
   - `/plan/task-graph.md`
   - `/plan/open-questions.md`
   - `/plan/forbidden-shortcuts.md`
-  - `/plan/walkthroughs.md`
   - `/plan/implementation-brief.json`
+
+Manual walkthrough notes are optional team documentation and are not enforced runner outputs.
 
 ### After `02-plan2tasks`
 

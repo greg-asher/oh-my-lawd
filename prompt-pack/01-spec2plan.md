@@ -124,7 +124,7 @@ The order should prefer:
 - blocking/approval semantics
 - orchestration semantics
 - product projection
-- walkthrough-level testing
+- clear, practical verification planning
 
 ### 8. `/plan/task-graph.md`
 A concrete work decomposition for building the system.
@@ -142,7 +142,7 @@ For each task include:
 - prerequisites
 - files or modules likely involved
 - acceptance gates advanced
-- expected artifacts/evidence
+- expected outputs/checks
 - honest completion criteria
 
 Do not produce vague tasks like “build runtime.” Break them into concrete units.
@@ -169,16 +169,14 @@ Examples of the kind of thing to catch:
 
 This should be one of the most useful files in the folder.
 
-### 11. `/plan/walkthroughs.md`
-Extract the canonical end-to-end scenarios from the spec, or derive them from the acceptance model if needed.
-For each walkthrough include:
-- scenario name
+### 11. `/plan/manual-walkthrough.md` (optional)
+If the team wants a manual release walkthrough checklist, include:
+- simple step name
 - why it matters
-- layers involved
-- minimum implementation prerequisites
-- what successful execution would prove
+- operator surface used
+- expected visible outcome
 
-These are planning targets, not test output.
+This is a manual team aid, not a system requirement.
 
 ### 12. `/plan/implementation-brief.json`
 Produce a machine-usable JSON brief that captures the normalized planning truth. Include at minimum:
@@ -236,7 +234,6 @@ Your plan should naturally enforce these principles when they are present in the
 - no resumability via inference
 - no layer leakage
 - operator-facing correctness is part of completion, not post-hoc polish
-- live operator validation is required for release closure when the spec requires it
 - preserved seams must remain visible from spec to implementation unless explicitly documented otherwise
 
 ## Required final behavior
@@ -252,7 +249,6 @@ The plan MUST explicitly extract and preserve:
 - assistant-response visibility requirements
 - cold-start usability requirements
 - runtime/provider reliability requirements
-- live operator walkthrough evidence requirements
 - preserved, canonical, and release-blocking seams
 
 ## Quality bar

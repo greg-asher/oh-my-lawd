@@ -8,7 +8,7 @@ This is an execution loop, not a redesign pass.
 
 ## Mission
 
-Select the next valid task from `/tasks`, implement the smallest coherent slice that satisfies it honestly, produce evidence, and update the repository’s execution records.
+Select the next valid task from `/tasks`, implement the smallest coherent slice that satisfies it honestly, produce check results, and update the repository’s execution records.
 
 Your work must stay aligned with:
 - the authoritative spec-derived plan in `/plan`
@@ -22,14 +22,14 @@ Your work must stay aligned with:
 3. The markdown task files are the human-readable source of truth. JSON task files are machine-readable projections and must stay aligned.
 4. If `/tasks` and `/plan` conflict, check whether execution revealed a real inconsistency. If not, do not improvise.
 5. Do not skip foundational truths to make visible feature progress.
-6. Do not mark a task complete without evidence.
+6. Do not mark a task complete without required checks.
 7. Do not silently widen scope.
 8. Do not rewrite architecture unless required by a real contradiction.
 9. If a task is too large, split it before or during execution and update `/tasks`.
 10. Keep status reporting honest.
 11. Prefer durable progress over broad speculative changes.
-12. A task cannot be marked `completed` unless both automated verification and live operator evidence are recorded when the task advances product-facing or provider-reliability acceptance gates.
-13. Demo, walkthrough, and scenario surfaces do not close preserved seams unless `/plan` explicitly defines them as the real release surface.
+12. A task cannot be marked `completed` unless concrete verification results are recorded for the task scope.
+13. Demo and scenario surfaces do not close preserved seams unless `/plan` explicitly defines them as the real release surface.
 
 ## Required files to read before acting
 
@@ -81,11 +81,15 @@ Required sections:
 11. `## Scope`
 12. `## Constraints`
 13. `## Implementation Notes`
-14. `## Expected Evidence`
-15. `## Expected Artifacts`
+14. `## Expected Checks`
+15. `## Expected Outputs`
 16. `## Open Questions`
 17. `## Handoff Notes`
 18. `## Iteration Log`
+
+Legacy compatibility:
+- if an existing task file still uses `## Expected Evidence` and `## Expected Artifacts`, treat them as equivalent for reading/validation.
+- when that task file is touched, normalize those headings to `## Expected Checks` and `## Expected Outputs`.
 
 ## Execution procedure
 
@@ -97,8 +101,8 @@ From the selected task file, extract:
 - acceptance gates advanced
 - scope
 - constraints
-- expected evidence
-- expected artifacts
+- expected checks (or legacy `Expected Evidence`)
+- expected outputs (or legacy `Expected Artifacts`)
 - open questions
 - handoff notes
 
@@ -124,7 +128,7 @@ Prefer this order when relevant:
 - orchestration behavior
 - product state projection
 - UX surfaces
-- walkthrough or end-to-end verification hooks
+- end-to-end verification hooks
 
 Do not build adjacent features unless the task requires them.
 
@@ -133,13 +137,11 @@ Run the strongest available verification for the work completed:
 - targeted tests
 - integration checks
 - schema checks
-- walkthrough-aligned tests
+- end-to-end checks
 - static analysis
 - verification notes only where automation is not yet possible
 
-When the task advances product-facing or provider-reliability acceptance gates, verification MUST include:
-- automated checks, and
-- live operator walkthrough evidence
+When the task advances product-facing or provider-reliability acceptance gates, verification MUST include at least one concrete check (automated or manual) tied to the real delivered surface.
 
 Be explicit about what was and was not verified.
 
@@ -156,14 +158,13 @@ After implementation and verification, set the task to one of:
 - `failed`
 
 Use:
-- `completed` only when the objective is met and expected evidence exists
+- `completed` only when the objective is met and required checks are satisfied
 - `partial_success` when meaningful progress exists but completion criteria are not fully met
 - `blocked` when a concrete dependency, ambiguity, or external condition prevents further honest progress
 - `failed` when the attempted approach did not succeed and needs rework
 
 Do not revert to `not_started` or `ready` after execution began unless you split the task and explicitly explain why.
 
-`completed` is invalid when required live operator evidence is missing.
 `completed` is invalid when preserved seam parity is still missing for the task's declared scope.
 
 ### Step 7: Perform parity audit before closure
@@ -188,8 +189,8 @@ Do not claim completion while any preserved seam in scope fails this audit.
 ### Update the active task file
 You must update:
 - `## Status`
-- `## Expected Evidence` with actual evidence results
-- `## Expected Artifacts` with actual outputs produced
+- `## Expected Checks` with actual check results
+- `## Expected Outputs` with actual outputs produced
 - `## Open Questions` if new real ambiguities emerged
 - `## Handoff Notes`
 - `## Iteration Log`
@@ -202,9 +203,9 @@ In the iteration log, append an entry with:
 - resulting status
 - next recommended step
 
-The latest iteration log entry MUST also include a standardized evidence block containing:
+The latest iteration log entry MUST also include a standardized checks block containing:
 - `automated_checks[]` (command and result)
-- `live_operator_walkthroughs[]` (scenario id, commands, observed output) when required
+- `manual_checks[]` (surface, steps, observed output) when used
 - `acceptance_gates_covered[]`
 
 ### Update `/tasks/index.md`
@@ -230,7 +231,7 @@ Refresh:
 Only update plan artifacts if execution materially changed shared understanding, including:
 - acceptance gate progress in `/plan/acceptance-matrix.md`
 - open ambiguities in `/plan/open-questions.md`
-- walkthrough readiness in `/plan/walkthroughs.md`
+- manual walkthrough notes in `/plan/manual-walkthrough.md` when used
 - preserved seam parity or documented seam deviations in `/plan/preserved-seams.md`
 - high-level execution log in `/plan/README.md`
 
@@ -239,9 +240,7 @@ Do not turn `/plan` into a task log. Update it only when repo-wide planning trut
 ## Release closure mode
 When operating in release-closure mode, continue execution until:
 1. no `ready` or `in_progress` tasks remain, and
-2. all required acceptance gates have evidence.
-
-Release closure MUST be rejected if any required live operator journey fails.
+2. all required acceptance gates have required checks.
 
 ## Forbidden shortcuts
 
@@ -255,7 +254,7 @@ You must not:
 - ignore write-scope conflict behavior
 - casually widen enums or policy modes
 - claim completion based only on code being present
-- defer all evidence to later while marking a task complete now
+- defer all required checks to later while marking a task complete now
 - allow demo-only or fixture-only operator surfaces to stand in for preserved seams
 
 ## Splitting behavior

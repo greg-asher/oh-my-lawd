@@ -13,7 +13,7 @@ Read the planning artifacts in `/plan`, decompose the implementation work into c
 The `/tasks` workspace must be:
 - dependency-aware
 - resumable
-- explicit about evidence and acceptance impact
+- explicit about checks and acceptance impact
 - aligned with the spec-derived plan
 - suitable for iterative execution by another agent
 
@@ -26,7 +26,7 @@ The `/tasks` workspace must be:
 5. Do not collapse multiple major work units into one vague task.
 6. Do not produce trivial micro-tasks with no coherent completion value.
 7. Every task must be dependency-aware, execution-ready, and honest about what counts as done.
-8. Every task must identify what evidence or artifacts are required before it can be marked complete.
+8. Every task must identify what checks and outputs are required before it can be marked complete.
 9. If `/plan/task-graph.md` contains tasks that are too large, split them.
 10. Preserve the layer boundaries from the plan.
 11. The markdown task files are the human-readable source of truth.
@@ -45,7 +45,6 @@ Read at minimum:
 - `/plan/task-graph.md`
 - `/plan/open-questions.md`
 - `/plan/forbidden-shortcuts.md`
-- `/plan/walkthroughs.md`
 - `/plan/implementation-brief.json`
 
 ## Required outcome
@@ -123,10 +122,10 @@ runtime
 ## Implementation Notes
 <what must be true when this task is done>
 
-## Expected Evidence
-- <tests, checks, or walkthrough evidence>
+## Expected Checks
+- <tests, checks, or manual validation notes>
 
-## Expected Artifacts
+## Expected Outputs
 - <files, logs, reports, or other outputs>
 
 ## Open Questions
@@ -156,11 +155,14 @@ Each task file must contain these sections in this order:
 11. `## Scope`
 12. `## Constraints`
 13. `## Implementation Notes`
-14. `## Expected Evidence`
-15. `## Expected Artifacts`
+14. `## Expected Checks`
+15. `## Expected Outputs`
 16. `## Open Questions`
 17. `## Handoff Notes`
 18. `## Iteration Log`
+
+Legacy compatibility:
+- if an existing task file still uses `## Expected Evidence` and `## Expected Artifacts`, normalize those headings to `## Expected Checks` and `## Expected Outputs` when the task file is touched.
 
 Allowed `## Status` values:
 - `not_started`
@@ -194,7 +196,7 @@ When creating task files:
    - product state projection
    - operator IA and first-run usability
    - provider schema compatibility and loop containment
-   - walkthrough verification
+   - practical verification coverage
 5. Keep UI and UX tasks downstream of the persisted/runtime/orchestration truths they depend on.
 6. Do not produce placeholder tasks like “do cleanup later” unless they correspond to a real acceptance or verification need.
 7. Do not bury operator-validation work inside generic CLI or UX tasks when the plan identifies it as a distinct contract surface.
@@ -289,7 +291,7 @@ Another agent should be able to:
 - select the next ready task
 - open a single task file
 - execute it honestly
-- update task state and evidence without re-planning the whole system
+- update task state and checks without re-planning the whole system
 
 The generated task set MUST include explicit tasks, when present in `/plan`, for:
 - operator information architecture and command taxonomy
@@ -297,15 +299,14 @@ The generated task set MUST include explicit tasks, when present in `/plan`, for
 - cold-start guided success
 - provider schema compatibility hardening
 - repeated tool-use loop containment
-- live operator walkthrough validation
 - preserved seam parity and primary operator-surface honesty
 
 Every preserved seam in `/plan/preserved-seams.md` MUST map to at least one task whose completion criteria include:
-- a concrete implementation artifact
+- a concrete implementation output
 - an executable operator or runtime surface when applicable
 - verification tied to that real surface
 
-Do not allow a preserved seam to be satisfied only by a demo flow, alias, fixture, or walkthrough harness unless the plan explicitly authorizes that reduction.
+Do not allow a preserved seam to be satisfied only by a demo flow, alias, or fixture unless the plan explicitly authorizes that reduction.
 
 If the plan defines a CLI or other explicit primary operator surface, the task set MUST include dedicated coverage for:
 - executable command surface
@@ -319,7 +320,7 @@ Do not:
 - flatten the plan into giant task blobs
 - create hyper-granular tasks that produce no meaningful checkpoint
 - ignore acceptance gates
-- ignore evidence requirements
+- ignore required checks
 - lose dependency order
 - mix runtime/orchestration/product concerns carelessly
 - let product tasks get ahead of runtime truth

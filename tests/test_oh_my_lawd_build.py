@@ -11,6 +11,7 @@ from unittest import mock
 from scripts.oh_my_lawd_build import (
     PhaseSpec,
     RunnerPaths,
+    build_phase_specs,
     build_parser,
     format_runner_event,
     load_run_state,
@@ -58,7 +59,6 @@ def create_plan_outputs(repo_root: Path) -> None:
         "plan/task-graph.md",
         "plan/open-questions.md",
         "plan/forbidden-shortcuts.md",
-        "plan/walkthroughs.md",
         "plan/implementation-brief.json",
     ):
         path = repo_root / relative
@@ -214,6 +214,18 @@ class ValidationTests(unittest.TestCase):
                     repo_root / "plan/system-summary.md",
                 ],
             )
+
+    def test_build_phase_specs_do_not_require_walkthrough_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            phase_specs = build_phase_specs(repo_root)
+            required = {
+                path.relative_to(repo_root).as_posix()
+                for path in phase_specs[0].required_outputs
+            }
+            self.assertNotIn("plan/walkthroughs.md", required)
+            self.assertNotIn("plan/manual-walkthrough.md", required)
 
 
 class QueueStateTests(unittest.TestCase):
