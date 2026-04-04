@@ -13,7 +13,7 @@ The main contribution standards are:
 - `spec/runtime-spec.md`: runtime execution, persistence, restore, approval binding and enforcement
 - `spec/orchestration-spec.md`: task state, blocking, scheduling, delegation, taxonomy
 - `spec/product-contract.md`: UX, visibility, explainability, approval UX, onboarding UX
-- `spec/system-coherence-review.md`: non-normative coherence and complexity guardrails
+- `spec/scope-and-simplicity-guide.md`: non-normative scope and simplicity guardrails
 - `prompt-pack/`: workflows that must remain aligned with the spec set
 
 ## Before Opening a PR

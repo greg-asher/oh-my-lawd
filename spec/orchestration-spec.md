@@ -36,39 +36,13 @@ Optional fields:
 For `status=completed`, `result` MUST be present and MUST include:
 1. `outcome_type` (`success | partial_success`)
 2. `summary` (non-empty)
-3. `artifacts[]` (field required, may be empty)
-4. `evidence[]` (field required, may be empty)
-5. `handoff_notes` (string, may be empty)
-6. `verification` (object conforming to section 3.3)
+3. `handoff_notes` (string, may be empty)
 
 For `status=failed`, `result` MUST include:
 1. `failure_code`
 2. `failure_summary`
 3. `remediation_steps[]`
-4. `artifacts[]` (field required, may be empty)
-5. `evidence[]` (field required, may be empty)
-6. `handoff_notes` (string, may be empty)
-
-### 3.2 Artifact and evidence typing
-Each artifact entry MUST include:
-1. `artifact_id`
-2. `artifact_kind` (`file | patch | log | other`)
-3. `locator` (path, URL, or resource pointer)
-4. `producer_task_id`
-
-Each evidence entry MUST include:
-1. `evidence_id`
-2. `evidence_kind` (`test_result | trace | reference | other`)
-3. `content` (structured or text)
-4. `producer_task_id`
-
-Non-normative subtype detail MAY be carried as implementation metadata.
-
-### 3.3 Verification model
-Verification data for completed tasks MUST include:
-1. `verification_status` (`unverified | verified`)
-2. `verification_method` (`automated | human_review | other`)
-3. `verification_evidence_refs[]` (references to `evidence_id`, may be empty only when `verification_status=unverified`)
+4. `handoff_notes` (string, may be empty)
 
 ## 4. DAG Validation
 Before execution, orchestration MUST reject graphs with:
@@ -198,7 +172,7 @@ Required additional codes:
 - `OR-03`: conflicting write scopes are blocked.
 - `OR-04`: delegation lineage is complete and queryable.
 - `OR-05`: synthesis contains explicit unresolved gaps when failures exist.
-- `OR-06`: completed and failed tasks both include required `artifacts[]`, `evidence[]`, and `handoff_notes`.
+- `OR-06`: completed and failed tasks both include required task-result fields and `handoff_notes`.
 - `OR-07`: write-scope normalization yields deterministic overlap decisions.
 - `OR-08`: task blocking is reachable only through legal task transitions and carries concrete blocking metadata.
 - `OR-09`: `dependency_first` is the required v1 baseline scheduling policy.

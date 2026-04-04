@@ -90,7 +90,7 @@ The documented primary operator surface MUST be the real release surface, not a 
 
 Required behavior:
 1. the primary operator surface MUST accept real user input and route through real runtime and orchestration behavior as applicable
-2. demo commands, walkthrough harnesses, and fixture-backed scenario flows do NOT satisfy the primary operator surface unless the documented release scope explicitly defines them as the real surface
+2. demo commands and fixture-backed scenario flows do NOT satisfy the primary operator surface unless the documented release scope explicitly defines them as the real surface
 3. if a preserved or canonical operator seam is renamed, the rename MUST be documented before implementation completion
 
 ## 6. Assistant Response Visibility Contract
