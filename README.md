@@ -79,34 +79,41 @@ The long-term goal is to maintain a public, implementation-grounded specificatio
 - [System Coherence Review](spec/system-coherence-review.md)
 
 ## Prompt Pack
-This repository also includes a prompt pack for turning the spec set into an executable implementation workflow:
+This repository also includes a prompt pack for turning the spec set into a spec-validated implementation workflow:
 
 - [prompt-pack/00-sample-starter-plan.md](prompt-pack/00-sample-starter-plan.md)
-- [prompt-pack/01-spec2plan.md](prompt-pack/01-spec2plan.md)
-- [prompt-pack/02-plan2tasks.md](prompt-pack/02-plan2tasks.md)
-- [prompt-pack/03-tasks2build.md](prompt-pack/03-tasks2build.md)
+- [prompt-pack/00-spec2slices.md](prompt-pack/00-spec2slices.md)
+- [prompt-pack/01-slice2metaplan.md](prompt-pack/01-slice2metaplan.md)
+- [prompt-pack/02-metaplan2detailedplan.md](prompt-pack/02-metaplan2detailedplan.md)
+- [prompt-pack/03-detailedplan2tasks.md](prompt-pack/03-detailedplan2tasks.md)
+- [prompt-pack/04-tasks2build.md](prompt-pack/04-tasks2build.md)
+- [prompt-pack/05-review.md](prompt-pack/05-review.md)
+- [prompt-pack/06-spec-check.md](prompt-pack/06-spec-check.md)
+- [prompt-pack/07-whole-spec-audit.md](prompt-pack/07-whole-spec-audit.md)
 
 Recommended starting point:
 1. use `00-sample-starter-plan.md` as a reusable high-level brief for cloning the repo and running the full workflow
 
 Recommended usage order:
-1. run `01-spec2plan.md` against the `spec/` folder to produce a `/plan` workspace
-2. validate `/plan` before moving on
-3. run `02-plan2tasks.md` against `/plan` to produce a `/tasks` workspace
-4. run `03-tasks2build.md` against `/tasks` and `/plan` to execute the next ready implementation task honestly
+1. run `00-spec2slices.md` against the `spec/` folder to produce the root `/plan` package plus `plan/slice-manifest.json`
+2. for each slice, run `01-slice2metaplan.md`, `02-metaplan2detailedplan.md`, and `03-detailedplan2tasks.md`
+3. loop `04-tasks2build.md` until the current slice queue is exhausted
+4. run `05-review.md` and `06-spec-check.md` before committing the slice
+5. after all slices pass, run `07-whole-spec-audit.md` before final completion
 
 The intended pipeline is:
-- `spec/` -> `/plan` -> `/tasks` -> implementation
+- `spec/` -> `00-spec2slices` -> slice `01..06` loops -> `07-whole-spec-audit`
 
 The prompt pack is designed to preserve the same boundaries as the spec set:
 - `spec/` remains the normative contract
-- `/plan` becomes the strategic implementation layer
-- `/tasks` becomes the operational execution queue
+- `/plan` remains the strategic implementation layer and slice index
+- `/tasks` remains the operational execution queue and review/spec-check evidence surface
 
 Workflow rules:
 - keep `spec/` read-only during plan, task, and implementation generation
 - do not skip directly from `spec/` to code
 - prefer fresh agent sessions for each major phase and each implementation task
+- require each slice to pass both review and direct spec-check before it is committed
 - treat repo state, not chat history, as the durable source of truth
 
 ## Autonomous Runner
@@ -119,17 +126,48 @@ Requirements:
 Usage:
 
 ```bash
-./bin/oh-my-lawd-build
+./bin/oh-my-lawd-build pipeline run
 ```
 
-Useful flags:
-- `./bin/oh-my-lawd-build --dry-run`
-- `./bin/oh-my-lawd-build --resume`
-- `./bin/oh-my-lawd-build --max-build-iterations 10`
-- `./bin/oh-my-lawd-build --model <model>`
-- `./bin/oh-my-lawd-build --profile <profile>`
+`pipeline run` requires a clean git worktree because the runner creates one commit per passing slice and a final commit after the whole-spec audit passes.
+
+Cold-start path to a first useful result:
+
+```bash
+./bin/oh-my-lawd-build --help
+./bin/oh-my-lawd-build pipeline preview --max-build-iterations 10
+./bin/oh-my-lawd-build pipeline run
+```
+
+Command groups:
+- `pipeline`
+  - `./bin/oh-my-lawd-build pipeline run`
+  - `./bin/oh-my-lawd-build pipeline resume`
+  - `./bin/oh-my-lawd-build pipeline preview --max-build-iterations 10`
+- `state`
+  - `./bin/oh-my-lawd-build state show --run-state-path docs/release-evidence/inputs/w7-provider-rejection-run-state.json`
+- `extension`
+  - `./bin/oh-my-lawd-build extension onboard --extension-id demo-extension --manifest-path extensions/demo-extension/manifest.json --config-path extensions/demo-extension/config.json`
+  - `./bin/oh-my-lawd-build extension status --extension-id demo-extension`
+
+Pipeline flags:
+- `--max-build-iterations 10`
+- `--max-slice-retries 3`
+- `--model <model>`
+- `--profile <profile>`
+- `--codex-bin <path>`
+- `--verbose`
+
+Legacy compatibility:
+- `./bin/oh-my-lawd-build` maps to `pipeline run`
+- `./bin/oh-my-lawd-build --dry-run` maps to `pipeline run --dry-run`
+- `./bin/oh-my-lawd-build --resume` maps to `pipeline run --resume`
 
 Runner state and logs are written to `.ohmylawd/`.
+
+Runner state now tracks the active slice, per-slice review/spec-check results, retry counts, and slice commit SHAs.
+
+`state show` expects a persisted runtime `run_state` JSON, not the runner metadata file at `.ohmylawd/run-state.json`.
 
 ## Contributing And Governance
 This repository is governed as a specification project, not an implementation repo.
@@ -171,9 +209,9 @@ The review model for this repo is:
 - `spec/product-contract.md`: product UX, approval UX, explainability UX, and operational visibility
 - `spec/system-coherence-review.md`: non-normative coherence, scope, and complexity guardrails
 - `prompt-pack/00-sample-starter-plan.md`: reusable high-level brief for bootstrapping the full workflow
-- `prompt-pack/01-spec2plan.md`: derives a buildable `/plan` package from the spec set
-- `prompt-pack/02-plan2tasks.md`: derives an executable `/tasks` queue from `/plan`
-- `prompt-pack/03-tasks2build.md`: executes the next ready task and updates `/tasks` and selected `/plan` truth
+- `prompt-pack/00-spec2slices.md`: derives the root `/plan` package plus the slice manifest from the spec set
+- `prompt-pack/01-slice2metaplan.md` through `prompt-pack/06-spec-check.md`: plan, task, build, review, and spec-check one slice at a time
+- `prompt-pack/07-whole-spec-audit.md`: closes the pipeline with a repository-wide spec audit
 - `CONTRIBUTING.md`: contributor rules for boundary discipline and spec-safe changes
 - `SECURITY.md`: security and sensitive-reporting guidance
 - `RELEASING.md`: release cadence, versioning guidance, and release checklist
