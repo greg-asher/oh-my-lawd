@@ -67,6 +67,7 @@ def create_plan_outputs(repo_root: Path) -> None:
         "plan/open-questions.md",
         "plan/forbidden-shortcuts.md",
         "plan/implementation-brief.json",
+        "plan/preserved-seams.md",
     ):
         path = repo_root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -248,7 +249,7 @@ class ValidationTests(unittest.TestCase):
                 ],
             )
 
-    def test_build_phase_specs_do_not_require_walkthrough_files(self):
+    def test_build_phase_specs_require_preserved_seams_and_not_walkthrough_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             seed_repo(repo_root)
@@ -257,6 +258,7 @@ class ValidationTests(unittest.TestCase):
                 path.relative_to(repo_root).as_posix()
                 for path in phase_specs[0].required_outputs
             }
+            self.assertIn("plan/preserved-seams.md", required)
             self.assertNotIn("plan/walkthroughs.md", required)
             self.assertNotIn("plan/manual-walkthrough.md", required)
 

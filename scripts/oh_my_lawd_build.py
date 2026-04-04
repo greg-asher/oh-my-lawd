@@ -24,6 +24,7 @@ PLAN_OUTPUTS = (
     "plan/open-questions.md",
     "plan/forbidden-shortcuts.md",
     "plan/implementation-brief.json",
+    "plan/preserved-seams.md",
 )
 
 TASK_OUTPUTS = (
