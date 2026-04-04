@@ -127,11 +127,17 @@ Primary runs stream live Codex stdout and stderr to the terminal. Interactive te
 Useful flags:
 - `./bin/oh-my-lawd-build --dry-run`
 - `./bin/oh-my-lawd-build --resume`
+- `./bin/oh-my-lawd-build --status`
 - `./bin/oh-my-lawd-build --max-build-iterations 10`
+- `./bin/oh-my-lawd-build --phase-timeout-seconds 300`
 - `./bin/oh-my-lawd-build --model <model>`
 - `./bin/oh-my-lawd-build --profile <profile>`
 
 `--dry-run` still writes the planned phase logs without invoking Codex. Runner state and logs are written to `.ohmylawd/`.
+
+`--status` is read-only. It prints the last recorded runner status, phase, completed phases, build iteration count, last exit code, last log path, timestamp, and any recorded error without validating repo outputs or invoking `codex`.
+
+`--phase-timeout-seconds` is optional and disabled by default. When set, the runner aborts any single phase that exceeds the timeout, records the failure in `.ohmylawd/run-state.json`, and preserves the partial phase log for debugging.
 
 ## Contributing And Governance
 This repository is governed as a specification project, not an implementation repo.

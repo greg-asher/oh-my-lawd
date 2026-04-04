@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from argparse import Namespace
@@ -10,11 +11,15 @@ from unittest import mock
 
 from scripts.oh_my_lawd_build import (
     PhaseSpec,
+    PhaseExecutionInterruptedError,
+    PhaseExecutionTimeoutError,
     RunnerPaths,
     build_phase_specs,
     build_parser,
+    format_run_state_summary,
     format_runner_event,
     load_run_state,
+    print_run_status,
     run_phase,
     run_pipeline,
     stream_supports_color,
@@ -27,7 +32,9 @@ from scripts.oh_my_lawd_build import (
 def make_args(**overrides: object) -> Namespace:
     defaults = {
         "resume": False,
+        "status": False,
         "max_build_iterations": 25,
+        "phase_timeout_seconds": None,
         "codex_bin": "codex",
         "model": None,
         "profile": None,
@@ -122,31 +129,57 @@ class FakePopen:
         *,
         stdout: str,
         stderr: str,
-        returncode: int = 0,
+        returncode: int | None = 0,
         fail_on_write: bool = False,
         fail_on_close: bool = False,
+        wait_effects: list[object] | None = None,
     ) -> None:
         self.stdin = FakeStdin(fail_on_write=fail_on_write, fail_on_close=fail_on_close)
         self.stdout = TTYBuffer(stdout)
         self.stderr = TTYBuffer(stderr)
         self.returncode = returncode
         self.wait_called = False
+        self.wait_effects = list(wait_effects or [])
+        self.terminate_called = False
+        self.kill_called = False
 
-    def wait(self) -> int:
+    def wait(self, timeout: float | None = None) -> int:
         self.wait_called = True
+        if self.wait_effects:
+            effect = self.wait_effects.pop(0)
+            if isinstance(effect, BaseException):
+                raise effect
+            self.returncode = int(effect)
+            return self.returncode
         return self.returncode
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.terminate_called = True
+
+    def kill(self) -> None:
+        self.kill_called = True
 
 
 class ParserTests(unittest.TestCase):
     def test_parser_defaults(self):
         args = build_parser().parse_args([])
         self.assertFalse(args.resume)
+        self.assertFalse(args.status)
         self.assertEqual(args.max_build_iterations, 25)
+        self.assertIsNone(args.phase_timeout_seconds)
         self.assertEqual(args.codex_bin, "codex")
         self.assertIsNone(args.model)
         self.assertIsNone(args.profile)
         self.assertFalse(args.dry_run)
         self.assertFalse(args.verbose)
+
+    def test_parser_accepts_status_and_phase_timeout(self):
+        args = build_parser().parse_args(["--status", "--phase-timeout-seconds", "30"])
+        self.assertTrue(args.status)
+        self.assertEqual(args.phase_timeout_seconds, 30)
 
 
 class RunnerPathsTests(unittest.TestCase):
@@ -284,6 +317,64 @@ class RunStateTests(unittest.TestCase):
             self.assertIsNone(load_run_state(paths))
 
 
+class StatusTests(unittest.TestCase):
+    def test_format_run_state_summary_includes_last_error(self):
+        rendered = format_run_state_summary(
+            {
+                "status": "failed",
+                "current_phase": "03-tasks2build",
+                "completed_phases": ["01-spec2plan", "02-plan2tasks"],
+                "build_iterations": 4,
+                "last_exit_code": 124,
+                "last_log_path": "/tmp/03.log",
+                "updated_at": "2026-04-03T12:00:00Z",
+                "last_error": "phase timed out",
+            }
+        )
+        self.assertIn("Runner status: failed", rendered)
+        self.assertIn("Last error: phase timed out", rendered)
+
+    def test_print_run_status_reports_missing_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = RunnerPaths(Path(tmp))
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
+            exit_code = print_run_status(paths, output=stdout_buffer, error_output=stderr_buffer)
+            self.assertEqual(exit_code, 1)
+            self.assertEqual("", stdout_buffer.getvalue())
+            self.assertIn("no runner state found", stderr_buffer.getvalue())
+
+    def test_print_run_status_prints_existing_state_without_codex(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            paths = RunnerPaths(repo_root)
+            paths.state_dir.mkdir(parents=True, exist_ok=True)
+            paths.run_state_path.write_text(
+                json.dumps(
+                    {
+                        "status": "interrupted",
+                        "current_phase": "01-spec2plan",
+                        "completed_phases": [],
+                        "build_iterations": 0,
+                        "last_exit_code": 130,
+                        "last_command": ["codex"],
+                        "last_log_path": "/tmp/01.log",
+                        "updated_at": "2026-04-03T12:00:00Z",
+                        "last_error": "execution interrupted by operator",
+                    }
+                )
+            )
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
+            with mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists") as ensure_codex_mock:
+                exit_code = print_run_status(paths, output=stdout_buffer, error_output=stderr_buffer)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual("", stderr_buffer.getvalue())
+            self.assertIn("Runner status: interrupted", stdout_buffer.getvalue())
+            self.assertIn("Last error: execution interrupted by operator", stdout_buffer.getvalue())
+            ensure_codex_mock.assert_not_called()
+
+
 class RunPhaseTests(unittest.TestCase):
     @mock.patch("scripts.oh_my_lawd_build.subprocess.Popen")
     def test_run_phase_streams_output_and_writes_log(self, popen_mock):
@@ -350,6 +441,64 @@ class RunPhaseTests(unittest.TestCase):
             result = run_phase(phase, repo_root, paths, make_args())
             self.assertEqual(result.exit_code, 1)
             self.assertIn("runner warning: subprocess closed stdin before prompt delivery", result.log_path.read_text())
+
+    @mock.patch("scripts.oh_my_lawd_build.subprocess.Popen")
+    def test_run_phase_timeout_records_partial_output_and_terminates_process(self, popen_mock):
+        fake_process = FakePopen(
+            stdout="partial stdout\n",
+            stderr="partial stderr\n",
+            returncode=None,
+            wait_effects=[
+                subprocess.TimeoutExpired(cmd="codex", timeout=5),
+                124,
+            ],
+        )
+        popen_mock.return_value = fake_process
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            phase = PhaseSpec(
+                key="01-spec2plan",
+                prompt_path=repo_root / "prompt-pack/01-spec2plan.md",
+                required_outputs=(),
+                log_name="01-spec2plan.log",
+            )
+            paths = RunnerPaths(repo_root)
+            with self.assertRaisesRegex(RuntimeError, "phase exceeded 5 seconds"):
+                run_phase(phase, repo_root, paths, make_args(phase_timeout_seconds=5))
+            log_text = (paths.logs_dir / "01-spec2plan.log").read_text()
+            self.assertIn("partial stdout", log_text)
+            self.assertIn("partial stderr", log_text)
+            self.assertIn("runner timeout: phase exceeded 5 seconds and was terminated", log_text)
+            self.assertTrue(fake_process.terminate_called)
+            self.assertFalse(fake_process.kill_called)
+
+    @mock.patch("scripts.oh_my_lawd_build.subprocess.Popen")
+    def test_run_phase_interrupt_terminates_process(self, popen_mock):
+        fake_process = FakePopen(
+            stdout="",
+            stderr="",
+            returncode=None,
+            wait_effects=[
+                KeyboardInterrupt(),
+                130,
+            ],
+        )
+        popen_mock.return_value = fake_process
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            phase = PhaseSpec(
+                key="01-spec2plan",
+                prompt_path=repo_root / "prompt-pack/01-spec2plan.md",
+                required_outputs=(),
+                log_name="01-spec2plan.log",
+            )
+            paths = RunnerPaths(repo_root)
+            with self.assertRaises(PhaseExecutionInterruptedError):
+                run_phase(phase, repo_root, paths, make_args())
+            self.assertTrue(fake_process.terminate_called)
+            self.assertIn("runner interrupted: execution stopped by operator", (paths.logs_dir / "01-spec2plan.log").read_text())
 
 
 class PipelineTests(unittest.TestCase):
@@ -477,6 +626,44 @@ class PipelineTests(unittest.TestCase):
 
     @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
     @mock.patch("scripts.oh_my_lawd_build.run_phase")
+    def test_timeout_failure_records_failed_state(self, run_phase_mock, _ensure_codex):
+        run_phase_mock.side_effect = PhaseExecutionTimeoutError(
+            "phase exceeded 5 seconds and was terminated",
+            mock.Mock(exit_code=124, command=["codex"], log_path=Path("/tmp/01.log")),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+
+            exit_code = run_pipeline(repo_root, make_args(phase_timeout_seconds=5))
+
+            self.assertEqual(exit_code, 124)
+            state = json.loads((repo_root / ".ohmylawd/run-state.json").read_text())
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["last_exit_code"], 124)
+            self.assertIn("phase exceeded 5 seconds", state["last_error"])
+
+    @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
+    @mock.patch("scripts.oh_my_lawd_build.run_phase")
+    def test_interruption_records_interrupted_state(self, run_phase_mock, _ensure_codex):
+        run_phase_mock.side_effect = PhaseExecutionInterruptedError(
+            "execution interrupted by operator",
+            mock.Mock(exit_code=130, command=["codex"], log_path=Path("/tmp/01.log")),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+
+            exit_code = run_pipeline(repo_root, make_args())
+
+            self.assertEqual(exit_code, 130)
+            state = json.loads((repo_root / ".ohmylawd/run-state.json").read_text())
+            self.assertEqual(state["status"], "interrupted")
+            self.assertEqual(state["current_phase"], "01-spec2plan")
+            self.assertIn("execution interrupted by operator", state["last_error"])
+
+    @mock.patch("scripts.oh_my_lawd_build.ensure_codex_exists")
+    @mock.patch("scripts.oh_my_lawd_build.run_phase")
     def test_resume_after_dry_run_does_not_skip_phase_generation(self, run_phase_mock, _ensure_codex):
         run_phase_mock.side_effect = [
             mock.Mock(exit_code=0, command=["codex"], log_path=Path("/tmp/01.log")),
@@ -507,6 +694,13 @@ class PipelineTests(unittest.TestCase):
                 run_pipeline(repo_root, make_args(resume=True))
 
             self.assertEqual(run_phase_mock.call_args_list[0].args[0].key, "01-spec2plan")
+
+    def test_run_pipeline_rejects_non_positive_phase_timeout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            with self.assertRaisesRegex(ValueError, "--phase-timeout-seconds must be at least 1"):
+                run_pipeline(repo_root, make_args(phase_timeout_seconds=0))
 
 
 if __name__ == "__main__":

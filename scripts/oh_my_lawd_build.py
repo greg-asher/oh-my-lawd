@@ -75,6 +75,18 @@ class PhaseResult:
     log_path: Path
 
 
+class PhaseExecutionTimeoutError(RuntimeError):
+    def __init__(self, message: str, result: PhaseResult) -> None:
+        super().__init__(message)
+        self.result = result
+
+
+class PhaseExecutionInterruptedError(RuntimeError):
+    def __init__(self, message: str, result: PhaseResult) -> None:
+        super().__init__(message)
+        self.result = result
+
+
 class _StreamCapture:
     def __init__(self, phase_key: str, stream_name: str, target: TextIO, use_color: bool) -> None:
         self.phase_key = phase_key
@@ -131,10 +143,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--resume", action="store_true", help="Resume from .ohmylawd/run-state.json if present.")
     parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Print the current runner state without invoking Codex.",
+    )
+    parser.add_argument(
         "--max-build-iterations",
         type=int,
         default=25,
         help="Maximum number of prompt-pack/03 iterations before failing closed.",
+    )
+    parser.add_argument(
+        "--phase-timeout-seconds",
+        type=int,
+        default=None,
+        help="Optional per-phase timeout in seconds before the runner aborts the current Codex invocation.",
     )
     parser.add_argument("--codex-bin", default="codex", help="Path to the Codex CLI binary.")
     parser.add_argument("--model", help="Optional Codex model override.")
@@ -306,12 +329,22 @@ def print_phase_banner(phase: PhaseSpec, log_path: Path, *, use_color: bool) -> 
     print(message, file=sys.stderr)
 
 
-def print_phase_summary(phase: PhaseSpec, exit_code: int, log_path: Path, *, use_color: bool) -> None:
-    status = "ok" if exit_code == 0 else f"failed ({exit_code})"
-    message = f"finished {phase.key} [{status}] -> {log_path}"
+def print_phase_summary(phase: PhaseSpec, summary_status: str, log_path: Path, *, use_color: bool) -> None:
+    message = f"finished {phase.key} [{summary_status}] -> {log_path}"
     if use_color:
         message = f"\033[1m{message}\033[0m"
     print(message, file=sys.stderr)
+
+
+def terminate_process(process: subprocess.Popen[str], *, grace_period_seconds: float = 2.0) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=grace_period_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 def stream_process_output(
@@ -320,7 +353,8 @@ def stream_process_output(
     *,
     stdout_use_color: bool,
     stderr_use_color: bool,
-) -> tuple[str, str]:
+    phase_timeout_seconds: int | None,
+) -> tuple[str, str, int, bool]:
     stdout_target = _StreamCapture(phase_key, "stdout", sys.stdout, stdout_use_color)
     stderr_target = _StreamCapture(phase_key, "stderr", sys.stderr, stderr_use_color)
 
@@ -337,11 +371,22 @@ def stream_process_output(
     ]
     for thread in threads:
         thread.start()
-    process.wait()
+
+    timed_out = False
+    try:
+        process.wait(timeout=phase_timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        terminate_process(process)
+    except KeyboardInterrupt:
+        terminate_process(process)
+        raise
+
     for thread in threads:
         thread.join()
 
-    return stdout_target.getvalue(), stderr_target.getvalue()
+    exit_code = process.returncode if process.returncode is not None else process.wait()
+    return stdout_target.getvalue(), stderr_target.getvalue(), exit_code, timed_out
 
 
 def write_phase_log(
@@ -425,15 +470,55 @@ def run_phase(
             process.stdin.close()
         except BrokenPipeError:
             stdin_write_error = True
-    stdout, stderr = stream_process_output(
-        process,
-        phase.key,
-        stdout_use_color=stdout_use_color,
-        stderr_use_color=stderr_use_color,
-    )
+    try:
+        stdout, stderr, exit_code, timed_out = stream_process_output(
+            process,
+            phase.key,
+            stdout_use_color=stdout_use_color,
+            stderr_use_color=stderr_use_color,
+            phase_timeout_seconds=args.phase_timeout_seconds,
+        )
+    except KeyboardInterrupt as exc:
+        stderr = "runner interrupted: execution stopped by operator\n"
+        write_phase_log(
+            log_path=log_path,
+            phase=phase,
+            command=command,
+            prompt_text=prompt_text,
+            exit_code=130,
+            stdout="",
+            stderr=stderr,
+            dry_run=False,
+        )
+        print_phase_summary(phase, "interrupted", log_path, use_color=stderr_use_color)
+        raise PhaseExecutionInterruptedError(
+            "execution interrupted by operator",
+            PhaseResult(exit_code=130, command=command, log_path=log_path),
+        ) from exc
+
     if stdin_write_error:
         stderr = f"{stderr}runner warning: subprocess closed stdin before prompt delivery\n"
-    exit_code = process.returncode if process.returncode is not None else process.wait()
+
+    if timed_out:
+        timeout_message = (
+            f"runner timeout: phase exceeded {args.phase_timeout_seconds} seconds and was terminated\n"
+        )
+        stderr = f"{stderr}{timeout_message}"
+        write_phase_log(
+            log_path=log_path,
+            phase=phase,
+            command=command,
+            prompt_text=prompt_text,
+            exit_code=124,
+            stdout=stdout,
+            stderr=stderr,
+            dry_run=False,
+        )
+        print_phase_summary(phase, "failed (timeout)", log_path, use_color=stderr_use_color)
+        raise PhaseExecutionTimeoutError(
+            timeout_message.rstrip(),
+            PhaseResult(exit_code=124, command=command, log_path=log_path),
+        )
 
     write_phase_log(
         log_path=log_path,
@@ -445,7 +530,8 @@ def run_phase(
         stderr=stderr,
         dry_run=False,
     )
-    print_phase_summary(phase, exit_code, log_path, use_color=stderr_use_color)
+    summary_status = "ok" if exit_code == 0 else f"failed ({exit_code})"
+    print_phase_summary(phase, summary_status, log_path, use_color=stderr_use_color)
     return PhaseResult(exit_code=exit_code, command=command, log_path=log_path)
 
 
@@ -458,7 +544,78 @@ def save_run_state(paths: RunnerPaths, payload: dict) -> None:
 def load_run_state(paths: RunnerPaths) -> dict | None:
     if not paths.run_state_path.exists():
         return None
-    return load_json(paths.run_state_path)
+    payload = load_json(paths.run_state_path)
+    if not isinstance(payload, dict):
+        raise ValueError("run-state.json must be a JSON object")
+    return payload
+
+
+def build_run_state_payload(
+    *,
+    status: str,
+    current_phase: str,
+    completed_phases: list[str],
+    build_iterations: int,
+    last_exit_code: int,
+    last_command: list[str],
+    last_log_path: Path,
+    error_message: str | None = None,
+) -> dict:
+    payload = {
+        "status": status,
+        "current_phase": current_phase,
+        "completed_phases": completed_phases,
+        "build_iterations": build_iterations,
+        "last_exit_code": last_exit_code,
+        "last_command": last_command,
+        "last_log_path": str(last_log_path),
+        "updated_at": utc_now(),
+    }
+    if error_message is not None:
+        payload["last_error"] = error_message
+    return payload
+
+
+def format_run_state_summary(state: dict) -> str:
+    completed_phases = state.get("completed_phases")
+    completed_display = "(none)"
+    if isinstance(completed_phases, list) and completed_phases:
+        completed_display = ", ".join(str(phase) for phase in completed_phases)
+
+    lines = [
+        f"Runner status: {state.get('status', 'unknown')}",
+        f"Current phase: {state.get('current_phase', 'unknown')}",
+        f"Completed phases: {completed_display}",
+        f"Build iterations: {state.get('build_iterations', 'unknown')}",
+        f"Last exit code: {state.get('last_exit_code', 'unknown')}",
+        f"Last log path: {state.get('last_log_path', 'unknown')}",
+        f"Updated at: {state.get('updated_at', 'unknown')}",
+    ]
+    if "last_error" in state:
+        lines.append(f"Last error: {state['last_error']}")
+    return "\n".join(lines)
+
+
+def print_run_status(
+    paths: RunnerPaths,
+    *,
+    output: TextIO | None = None,
+    error_output: TextIO | None = None,
+) -> int:
+    output = sys.stdout if output is None else output
+    error_output = sys.stderr if error_output is None else error_output
+    try:
+        state = load_run_state(paths)
+    except ValueError as exc:
+        print(f"invalid runner state: {exc}", file=error_output)
+        return 1
+
+    if state is None:
+        print(f"no runner state found at {paths.run_state_path}", file=error_output)
+        return 1
+
+    print(format_run_state_summary(state), file=output)
+    return 0
 
 
 def record_run_state(
@@ -473,21 +630,41 @@ def record_run_state(
     last_log_path: Path,
     error_message: str | None = None,
 ) -> None:
-    payload = {
-        "status": status,
-        "current_phase": current_phase,
-        "completed_phases": completed_phases,
-        "build_iterations": build_iterations,
-        "last_exit_code": last_exit_code,
-        "last_command": last_command,
-        "last_log_path": str(last_log_path),
-        "updated_at": utc_now(),
-    }
-    if error_message is not None:
-        payload["last_error"] = error_message
     save_run_state(
         paths,
-        payload,
+        build_run_state_payload(
+            status=status,
+            current_phase=current_phase,
+            completed_phases=completed_phases,
+            build_iterations=build_iterations,
+            last_exit_code=last_exit_code,
+            last_command=last_command,
+            last_log_path=last_log_path,
+            error_message=error_message,
+        ),
+    )
+
+
+def record_phase_state(
+    *,
+    paths: RunnerPaths,
+    status: str,
+    phase_key: str,
+    completed_phases: list[str],
+    build_iterations: int,
+    result: PhaseResult,
+    error_message: str | None = None,
+) -> None:
+    record_run_state(
+        paths=paths,
+        status=status,
+        current_phase=phase_key,
+        completed_phases=completed_phases,
+        build_iterations=build_iterations,
+        last_exit_code=result.exit_code,
+        last_command=result.command,
+        last_log_path=result.log_path,
+        error_message=error_message,
     )
 
 
@@ -510,6 +687,8 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
     validate_repo_root(repo_root)
     if args.max_build_iterations < 1:
         raise ValueError("--max-build-iterations must be at least 1")
+    if args.phase_timeout_seconds is not None and args.phase_timeout_seconds < 1:
+        raise ValueError("--phase-timeout-seconds must be at least 1")
 
     paths = RunnerPaths(repo_root)
     paths.state_dir.mkdir(parents=True, exist_ok=True)
@@ -549,17 +728,38 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
         if phase.key in completed_phases:
             continue
 
-        result = run_phase(phase, repo_root, paths, args)
-        if result.exit_code != 0:
-            record_run_state(
+        try:
+            result = run_phase(phase, repo_root, paths, args)
+        except PhaseExecutionTimeoutError as exc:
+            record_phase_state(
                 paths=paths,
                 status="failed",
-                current_phase=phase.key,
+                phase_key=phase.key,
                 completed_phases=completed_phases,
                 build_iterations=0,
-                last_exit_code=result.exit_code,
-                last_command=result.command,
-                last_log_path=result.log_path,
+                result=exc.result,
+                error_message=str(exc),
+            )
+            return exc.result.exit_code
+        except PhaseExecutionInterruptedError as exc:
+            record_phase_state(
+                paths=paths,
+                status="interrupted",
+                phase_key=phase.key,
+                completed_phases=completed_phases,
+                build_iterations=0,
+                result=exc.result,
+                error_message=str(exc),
+            )
+            return exc.result.exit_code
+        if result.exit_code != 0:
+            record_phase_state(
+                paths=paths,
+                status="failed",
+                phase_key=phase.key,
+                completed_phases=completed_phases,
+                build_iterations=0,
+                result=result,
             )
             return result.exit_code
 
@@ -567,29 +767,25 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
             try:
                 validate_phase_outputs(repo_root, phase)
             except (FileNotFoundError, ValueError) as exc:
-                record_run_state(
+                record_phase_state(
                     paths=paths,
                     status="failed",
-                    current_phase=phase.key,
+                    phase_key=phase.key,
                     completed_phases=completed_phases,
                     build_iterations=0,
-                    last_exit_code=1,
-                    last_command=result.command,
-                    last_log_path=result.log_path,
+                    result=PhaseResult(exit_code=1, command=result.command, log_path=result.log_path),
                     error_message=str(exc),
                 )
                 raise
 
         completed_phases.append(phase.key)
-        record_run_state(
+        record_phase_state(
             paths=paths,
             status="running" if not args.dry_run else "dry_run",
-            current_phase=phase.key,
+            phase_key=phase.key,
             completed_phases=completed_phases if not args.dry_run else [],
             build_iterations=0,
-            last_exit_code=0,
-            last_command=result.command,
-            last_log_path=result.log_path,
+            result=PhaseResult(exit_code=0, command=result.command, log_path=result.log_path),
         )
 
     if args.dry_run:
@@ -613,32 +809,51 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
 
     for iteration in range(start_iteration, args.max_build_iterations + 1):
         phase = build_loop_phase(repo_root, iteration)
-        result = run_phase(phase, repo_root, paths, args)
-        if result.exit_code != 0:
-            record_run_state(
+        try:
+            result = run_phase(phase, repo_root, paths, args)
+        except PhaseExecutionTimeoutError as exc:
+            record_phase_state(
                 paths=paths,
                 status="failed",
-                current_phase=phase.key,
+                phase_key=phase.key,
                 completed_phases=completed_phases,
                 build_iterations=iteration,
-                last_exit_code=result.exit_code,
-                last_command=result.command,
-                last_log_path=result.log_path,
+                result=exc.result,
+                error_message=str(exc),
+            )
+            return exc.result.exit_code
+        except PhaseExecutionInterruptedError as exc:
+            record_phase_state(
+                paths=paths,
+                status="interrupted",
+                phase_key=phase.key,
+                completed_phases=completed_phases,
+                build_iterations=iteration,
+                result=exc.result,
+                error_message=str(exc),
+            )
+            return exc.result.exit_code
+        if result.exit_code != 0:
+            record_phase_state(
+                paths=paths,
+                status="failed",
+                phase_key=phase.key,
+                completed_phases=completed_phases,
+                build_iterations=iteration,
+                result=result,
             )
             return result.exit_code
 
         try:
             queue_state = read_queue_state(repo_root / "tasks/queue-state.json")
         except (FileNotFoundError, ValueError) as exc:
-            record_run_state(
+            record_phase_state(
                 paths=paths,
                 status="failed",
-                current_phase=phase.key,
+                phase_key=phase.key,
                 completed_phases=completed_phases,
                 build_iterations=iteration,
-                last_exit_code=1,
-                last_command=result.command,
-                last_log_path=result.log_path,
+                result=PhaseResult(exit_code=1, command=result.command, log_path=result.log_path),
                 error_message=str(exc),
             )
             raise
@@ -646,15 +861,13 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
         if not should_continue_build_loop(queue_state):
             status = "completed"
 
-        record_run_state(
+        record_phase_state(
             paths=paths,
             status=status,
-            current_phase=phase.key,
+            phase_key=phase.key,
             completed_phases=completed_phases + ([phase.key] if status == "completed" else []),
             build_iterations=iteration,
-            last_exit_code=0,
-            last_command=result.command,
-            last_log_path=result.log_path,
+            result=PhaseResult(exit_code=0, command=result.command, log_path=result.log_path),
         )
 
         if status == "completed":
@@ -679,6 +892,8 @@ def run_pipeline(repo_root: Path, args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     repo_root = default_repo_root()
+    if args.status:
+        return print_run_status(RunnerPaths(repo_root))
     return run_pipeline(repo_root, args)
 
 
