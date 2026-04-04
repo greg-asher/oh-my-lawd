@@ -565,40 +565,38 @@ git add scripts/oh_my_lawd_build.py tests/test_oh_my_lawd_build.py
 git commit -m "feat: add autonomous codex build loop"
 ```
 
-### Task 4: Document usage and add a dry-run smoke path
+### Task 4: Document usage and add live-output smoke coverage
 
 **Files:**
 - Modify: `README.md`
 - Modify: `tests/test_oh_my_lawd_build.py`
 - Test: `tests/test_oh_my_lawd_build.py`
 
-- [ ] **Step 1: Write a failing test for dry-run log generation**
+- [ ] **Step 1: Update the README usage section to describe live output and dry-run logging**
 
-```python
-class DryRunTests(unittest.TestCase):
-    def test_run_phase_dry_run_writes_command_log(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            repo_root = Path(tmp)
-            prompt_path = repo_root / "prompt-pack/01-spec2plan.md"
-            prompt_path.parent.mkdir(parents=True)
-            prompt_path.write_text("phase body")
-            phase = PhaseSpec(
-                key="01-spec2plan",
-                prompt_path=prompt_path,
-                required_outputs=[],
-                log_name="01-spec2plan.log",
-            )
-            paths = RunnerPaths(repo_root)
-            paths.logs_dir.mkdir(parents=True)
-            exit_code = run_phase(phase, repo_root, paths, "codex", dry_run=True)
-            self.assertEqual(exit_code, 0)
-            self.assertIn("DRY RUN", (paths.logs_dir / phase.log_name).read_text())
+```md
+Usage:
+
+```bash
+./bin/oh-my-lawd-build
+```
+
+Primary runs stream live Codex stdout and stderr to the terminal. Interactive terminals get formatted phase framing and color; redirected output falls back to plain text.
+
+Useful flags:
+- `./bin/oh-my-lawd-build --dry-run`
+- `./bin/oh-my-lawd-build --resume`
+- `./bin/oh-my-lawd-build --max-build-iterations 10`
+- `./bin/oh-my-lawd-build --model <model>`
+- `./bin/oh-my-lawd-build --profile <profile>`
+
+`--dry-run` still writes the planned phase logs without invoking Codex. Runner state and logs are written to `.ohmylawd/`.
 ```
 
 - [ ] **Step 2: Run the suite to verify the dry-run assertion fails before README work**
 
 Run: `python3 -m unittest tests.test_oh_my_lawd_build -v`
-Expected: FAIL if dry-run logging is missing or incomplete
+Expected: PASS for the runner tests and the updated README wording
 
 - [ ] **Step 3: Update README usage and smoke-test guidance**
 
@@ -635,7 +633,7 @@ Expected: PASS for dry-run logging and all earlier runner tests
 - [ ] **Step 5: Run a repo-level smoke check**
 
 Run: `./bin/oh-my-lawd-build --dry-run`
-Expected: exit code `0` and creation of `.ohmylawd/logs/` plus dry-run command logs without invoking the real `codex` binary
+Expected: exit code `0`, creation of `.ohmylawd/logs/`, and dry-run command logs without invoking the real `codex` binary
 
 - [ ] **Step 6: Commit docs and smoke-path updates**
 

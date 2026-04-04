@@ -122,6 +122,8 @@ Usage:
 ./bin/oh-my-lawd-build
 ```
 
+Primary runs stream live Codex stdout and stderr to the terminal. Interactive terminals get formatted phase framing and color; redirected output falls back to plain text.
+
 Useful flags:
 - `./bin/oh-my-lawd-build --dry-run`
 - `./bin/oh-my-lawd-build --resume`
@@ -129,7 +131,7 @@ Useful flags:
 - `./bin/oh-my-lawd-build --model <model>`
 - `./bin/oh-my-lawd-build --profile <profile>`
 
-Runner state and logs are written to `.ohmylawd/`.
+`--dry-run` still writes the planned phase logs without invoking Codex. Runner state and logs are written to `.ohmylawd/`.
 
 ## Contributing And Governance
 This repository is governed as a specification project, not an implementation repo.

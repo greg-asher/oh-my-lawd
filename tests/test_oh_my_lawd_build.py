@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
@@ -11,9 +12,11 @@ from scripts.oh_my_lawd_build import (
     PhaseSpec,
     RunnerPaths,
     build_parser,
+    format_runner_event,
     load_run_state,
     run_phase,
     run_pipeline,
+    stream_supports_color,
     should_continue_build_loop,
     validate_queue_state,
     validate_required_outputs,
@@ -85,6 +88,55 @@ def create_task_outputs(repo_root: Path, queue_state: dict | None = None) -> Non
     (repo_root / "tasks/queue-state.json").write_text(json.dumps(payload))
 
 
+class TTYBuffer(io.StringIO):
+    def __init__(self, initial_value: str = "", *, tty: bool = False) -> None:
+        super().__init__(initial_value)
+        self._tty = tty
+
+    def isatty(self) -> bool:
+        return self._tty
+
+
+class FakeStdin:
+    def __init__(self, *, fail_on_write: bool = False, fail_on_close: bool = False) -> None:
+        self.buffer: list[str] = []
+        self.closed = False
+        self.fail_on_write = fail_on_write
+        self.fail_on_close = fail_on_close
+
+    def write(self, text: str) -> int:
+        if self.fail_on_write:
+            raise BrokenPipeError("stdin closed")
+        self.buffer.append(text)
+        return len(text)
+
+    def close(self) -> None:
+        if self.fail_on_close:
+            raise BrokenPipeError("stdin already closed")
+        self.closed = True
+
+
+class FakePopen:
+    def __init__(
+        self,
+        *,
+        stdout: str,
+        stderr: str,
+        returncode: int = 0,
+        fail_on_write: bool = False,
+        fail_on_close: bool = False,
+    ) -> None:
+        self.stdin = FakeStdin(fail_on_write=fail_on_write, fail_on_close=fail_on_close)
+        self.stdout = TTYBuffer(stdout)
+        self.stderr = TTYBuffer(stderr)
+        self.returncode = returncode
+        self.wait_called = False
+
+    def wait(self) -> int:
+        self.wait_called = True
+        return self.returncode
+
+
 class ParserTests(unittest.TestCase):
     def test_parser_defaults(self):
         args = build_parser().parse_args([])
@@ -103,6 +155,42 @@ class RunnerPathsTests(unittest.TestCase):
         self.assertEqual(paths.state_dir, Path("/tmp/demo/.ohmylawd"))
         self.assertEqual(paths.logs_dir, Path("/tmp/demo/.ohmylawd/logs"))
         self.assertEqual(paths.run_state_path, Path("/tmp/demo/.ohmylawd/run-state.json"))
+
+
+class TerminalFormattingTests(unittest.TestCase):
+    def test_format_runner_event_uses_plain_text_without_tty(self):
+        rendered = format_runner_event(
+            phase_key="01-spec2plan",
+            stream="stdout",
+            message="hello",
+            use_color=False,
+        )
+        self.assertEqual(rendered, "[01-spec2plan:stdout] hello")
+
+    def test_stream_supports_color_uses_tty_detection(self):
+        self.assertTrue(stream_supports_color(TTYBuffer(tty=True)))
+        self.assertFalse(stream_supports_color(TTYBuffer(tty=False)))
+
+    @mock.patch("scripts.oh_my_lawd_build.subprocess.Popen")
+    def test_run_phase_formats_each_stream_based_on_its_own_tty(self, popen_mock):
+        fake_process = FakePopen(stdout="ok stdout\n", stderr="warn stderr\n", returncode=0)
+        popen_mock.return_value = fake_process
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            phase = PhaseSpec(
+                key="01-spec2plan",
+                prompt_path=repo_root / "prompt-pack/01-spec2plan.md",
+                required_outputs=(),
+                log_name="01-spec2plan.log",
+            )
+            paths = RunnerPaths(repo_root)
+            stdout_buffer = TTYBuffer(tty=False)
+            stderr_buffer = TTYBuffer(tty=True)
+            with mock.patch("sys.stdout", stdout_buffer), mock.patch("sys.stderr", stderr_buffer):
+                run_phase(phase, repo_root, paths, make_args())
+            self.assertNotIn("\033[", stdout_buffer.getvalue())
+            self.assertIn("\033[", stderr_buffer.getvalue())
 
 
 class ValidationTests(unittest.TestCase):
@@ -185,9 +273,10 @@ class RunStateTests(unittest.TestCase):
 
 
 class RunPhaseTests(unittest.TestCase):
-    @mock.patch("scripts.oh_my_lawd_build.subprocess.run")
-    def test_run_phase_writes_log_and_returns_exit_code(self, run_mock):
-        run_mock.return_value = mock.Mock(returncode=0, stdout="ok", stderr="")
+    @mock.patch("scripts.oh_my_lawd_build.subprocess.Popen")
+    def test_run_phase_streams_output_and_writes_log(self, popen_mock):
+        fake_process = FakePopen(stdout="ok stdout\n", stderr="warn stderr\n", returncode=0)
+        popen_mock.return_value = fake_process
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             seed_repo(repo_root)
@@ -198,12 +287,19 @@ class RunPhaseTests(unittest.TestCase):
                 log_name="01-spec2plan.log",
             )
             paths = RunnerPaths(repo_root)
-            result = run_phase(phase, repo_root, paths, make_args())
+            stdout_buffer = TTYBuffer(tty=True)
+            stderr_buffer = TTYBuffer(tty=True)
+            with mock.patch("sys.stdout", stdout_buffer), mock.patch("sys.stderr", stderr_buffer):
+                result = run_phase(phase, repo_root, paths, make_args())
             self.assertEqual(result.exit_code, 0)
             self.assertEqual(result.command[-1], "-")
             self.assertTrue(result.log_path.exists())
-            self.assertIn("=== PROMPT ===", result.log_path.read_text())
-            run_mock.assert_called_once()
+            self.assertIn("ok stdout", stdout_buffer.getvalue())
+            self.assertIn("warn stderr", stderr_buffer.getvalue())
+            self.assertIn("\033[", stderr_buffer.getvalue())
+            self.assertIn("ok stdout", result.log_path.read_text())
+            self.assertIn("warn stderr", result.log_path.read_text())
+            self.assertTrue(fake_process.wait_called)
 
     def test_run_phase_dry_run_writes_command_log(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -219,6 +315,29 @@ class RunPhaseTests(unittest.TestCase):
             result = run_phase(phase, repo_root, paths, make_args(dry_run=True))
             self.assertEqual(result.exit_code, 0)
             self.assertIn("DRY RUN", result.log_path.read_text())
+
+    @mock.patch("scripts.oh_my_lawd_build.subprocess.Popen")
+    def test_run_phase_logs_warning_when_subprocess_closes_stdin_early(self, popen_mock):
+        fake_process = FakePopen(
+            stdout="",
+            stderr="codex exited early\n",
+            returncode=1,
+            fail_on_write=True,
+        )
+        popen_mock.return_value = fake_process
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            seed_repo(repo_root)
+            phase = PhaseSpec(
+                key="01-spec2plan",
+                prompt_path=repo_root / "prompt-pack/01-spec2plan.md",
+                required_outputs=(),
+                log_name="01-spec2plan.log",
+            )
+            paths = RunnerPaths(repo_root)
+            result = run_phase(phase, repo_root, paths, make_args())
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("runner warning: subprocess closed stdin before prompt delivery", result.log_path.read_text())
 
 
 class PipelineTests(unittest.TestCase):

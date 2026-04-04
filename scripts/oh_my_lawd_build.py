@@ -6,9 +6,11 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TextIO
 
 PLAN_OUTPUTS = (
     "plan/README.md",
@@ -72,6 +74,52 @@ class PhaseResult:
     exit_code: int
     command: list[str]
     log_path: Path
+
+
+class _StreamCapture:
+    def __init__(self, phase_key: str, stream_name: str, target: TextIO, use_color: bool) -> None:
+        self.phase_key = phase_key
+        self.stream_name = stream_name
+        self.target = target
+        self.use_color = use_color
+        self.buffer: list[str] = []
+        self.lock = threading.Lock()
+
+    def write(self, message: str) -> None:
+        if not message:
+            return
+        self.buffer.append(message)
+        rendered = format_runner_event(
+            phase_key=self.phase_key,
+            stream=self.stream_name,
+            message=message.rstrip("\n"),
+            use_color=self.use_color,
+        )
+        if message.endswith("\n"):
+            rendered += "\n"
+        with self.lock:
+            self.target.write(rendered)
+            self.target.flush()
+
+    def getvalue(self) -> str:
+        return "".join(self.buffer)
+
+
+def stream_supports_color(stream: TextIO) -> bool:
+    return hasattr(stream, "isatty") and stream.isatty()
+
+
+def format_runner_event(*, phase_key: str, stream: str, message: str, use_color: bool) -> str:
+    prefix = f"[{phase_key}:{stream}]"
+    if not use_color:
+        return f"{prefix} {message}"
+
+    dim = "\033[2m"
+    reset = "\033[0m"
+    stdout_color = "\033[36m"
+    stderr_color = "\033[33m"
+    color = stdout_color if stream == "stdout" else stderr_color
+    return f"{dim}{prefix}{reset} {color}{message}{reset}"
 
 
 def utc_now() -> str:
@@ -252,6 +300,51 @@ def build_codex_command(args: argparse.Namespace, repo_root: Path) -> list[str]:
     return command
 
 
+def print_phase_banner(phase: PhaseSpec, log_path: Path, *, use_color: bool) -> None:
+    message = f"starting {phase.key} -> {log_path}"
+    if use_color:
+        message = f"\033[1m{message}\033[0m"
+    print(message, file=sys.stderr)
+
+
+def print_phase_summary(phase: PhaseSpec, exit_code: int, log_path: Path, *, use_color: bool) -> None:
+    status = "ok" if exit_code == 0 else f"failed ({exit_code})"
+    message = f"finished {phase.key} [{status}] -> {log_path}"
+    if use_color:
+        message = f"\033[1m{message}\033[0m"
+    print(message, file=sys.stderr)
+
+
+def stream_process_output(
+    process: subprocess.Popen[str],
+    phase_key: str,
+    *,
+    stdout_use_color: bool,
+    stderr_use_color: bool,
+) -> tuple[str, str]:
+    stdout_target = _StreamCapture(phase_key, "stdout", sys.stdout, stdout_use_color)
+    stderr_target = _StreamCapture(phase_key, "stderr", sys.stderr, stderr_use_color)
+
+    def pump(source: TextIO | None, target: _StreamCapture) -> None:
+        if source is None:
+            return
+        for chunk in iter(source.readline, ""):
+            target.write(chunk)
+        source.close()
+
+    threads = [
+        threading.Thread(target=pump, args=(process.stdout, stdout_target), daemon=True),
+        threading.Thread(target=pump, args=(process.stderr, stderr_target), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    process.wait()
+    for thread in threads:
+        thread.join()
+
+    return stdout_target.getvalue(), stderr_target.getvalue()
+
+
 def write_phase_log(
     *,
     log_path: Path,
@@ -309,25 +402,52 @@ def run_phase(
         )
         return PhaseResult(exit_code=0, command=command, log_path=log_path)
 
-    completed = subprocess.run(
+    stdout_use_color = stream_supports_color(sys.stdout)
+    stderr_use_color = stream_supports_color(sys.stderr)
+    print_phase_banner(phase, log_path, use_color=stderr_use_color)
+
+    process = subprocess.Popen(
         command,
         cwd=repo_root,
-        input=prompt_text,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        capture_output=True,
-        check=False,
+        bufsize=1,
     )
+    assert process.stdin is not None
+    stdin_write_error = False
+    try:
+        process.stdin.write(prompt_text)
+    except BrokenPipeError:
+        stdin_write_error = True
+    finally:
+        try:
+            process.stdin.close()
+        except BrokenPipeError:
+            stdin_write_error = True
+    stdout, stderr = stream_process_output(
+        process,
+        phase.key,
+        stdout_use_color=stdout_use_color,
+        stderr_use_color=stderr_use_color,
+    )
+    if stdin_write_error:
+        stderr = f"{stderr}runner warning: subprocess closed stdin before prompt delivery\n"
+    exit_code = process.returncode if process.returncode is not None else process.wait()
+
     write_phase_log(
         log_path=log_path,
         phase=phase,
         command=command,
         prompt_text=prompt_text,
-        exit_code=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr=stderr,
         dry_run=False,
     )
-    return PhaseResult(exit_code=completed.returncode, command=command, log_path=log_path)
+    print_phase_summary(phase, exit_code, log_path, use_color=stderr_use_color)
+    return PhaseResult(exit_code=exit_code, command=command, log_path=log_path)
 
 
 def save_run_state(paths: RunnerPaths, payload: dict) -> None:

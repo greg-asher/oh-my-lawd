@@ -8,6 +8,7 @@ The first version is optimized for unattended demo execution:
 - one command from a fresh clone
 - sensible defaults
 - durable on-disk run state for resume and debugging
+- live, formatted phase output in interactive terminals
 - no prompt-pack format changes
 
 ## Goals
@@ -58,8 +59,8 @@ Initial version should support:
 - `--resume`: continue from recorded runner state if present
 - `--max-build-iterations N`: hard safety cap for `03` loop
 - `--codex-bin PATH`: override `codex` binary path
-- `--dry-run`: print planned commands without executing them
-- `--verbose`: stream more runner diagnostics
+- `--dry-run`: write planned phase logs without executing Codex
+- `--verbose`: print extra runner diagnostics
 
 Nice-to-have but not required for v1:
 - prompt/model passthrough flags
@@ -75,7 +76,8 @@ The helper should not reinterpret the prompt-pack logic. For each phase it shoul
    - expected writable directories
    - execution mode for the current phase
 3. Pass the composed prompt to `codex`.
-4. Capture stdout, stderr, exit code, start time, and end time in `.ohmylawd/logs/`.
+4. Stream live stdout and stderr to the terminal during real runs.
+5. Capture stdout, stderr, exit code, start time, and end time in `.ohmylawd/logs/`.
 
 The sequence is fixed:
 - `prompt-pack/01-spec2plan.md`
@@ -178,6 +180,7 @@ Logs should contain:
 - timestamps
 - combined process output
 - runner-side validation summary
+- dry-run logs should note that Codex execution was skipped
 
 ## Error Handling
 
